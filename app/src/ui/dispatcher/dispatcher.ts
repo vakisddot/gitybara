@@ -23,6 +23,7 @@ import {
   MultiCommitOperationConflictState,
   IMultiCommitOperationState,
   CommitOptions,
+  ChangesListViewMode,
 } from '../../lib/app-state'
 import { assertNever, fatalError } from '../../lib/fatal-error'
 import {
@@ -4280,6 +4281,10 @@ export class Dispatcher {
 
   public toggleChangesFilterVisibility() {
     this.appStore._toggleChangesFilterVisibility()
+  }
+
+  public setChangesListViewMode(mode: ChangesListViewMode) {
+    this.appStore._setChangesListViewMode(mode)
   }
 
   /** Set the selected Copilot model for a specific feature. */

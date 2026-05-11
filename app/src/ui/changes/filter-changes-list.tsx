@@ -20,7 +20,11 @@ import {
 import { Account } from '../../models/account'
 import { Author, UnknownAuthor } from '../../models/author'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
-import { CommitOptions, IFileListFilterState } from '../../lib/app-state'
+import {
+  ChangesListViewMode,
+  CommitOptions,
+  IFileListFilterState,
+} from '../../lib/app-state'
 import {
   isSafeFileExtension,
   DefaultEditorLabel,
@@ -58,7 +62,7 @@ import { RepoRulesInfo } from '../../models/repo-rules'
 import { IAheadBehind } from '../../models/branch'
 import { StashDiffViewerId } from '../stashing'
 import { AugmentedSectionFilterList } from '../lib/augmented-filter-list'
-import { IFilterListGroup, IFilterListItem } from '../lib/filter-list'
+import { IFilterListGroup } from '../lib/filter-list'
 import { ClickSource } from '../lib/list'
 import memoizeOne from 'memoize-one'
 import { IMatches } from '../../lib/fuzzy-find'
@@ -75,14 +79,20 @@ import {
 import { ChangesListFilterOptions } from './changes-list-filter-options'
 import { HookProgress } from '../../lib/git'
 import { formatNumber } from '../../lib/format-number'
-
-export interface IChangesListItem extends IFilterListItem {
-  readonly id: string
-  readonly text: ReadonlyArray<string>
-  readonly change: WorkingDirectoryFileChange
-}
+import { TreeChangesList } from './tree/tree-changes-list'
+import { isPathInDirectory } from './tree/tree-changes-rows'
+import {
+  collapseTreeDirectoryRecursively,
+  expandTreeDirectoryRecursively,
+  getTreeDirectoryIds,
+  pruneCollapsedTreeDirectoryIds,
+  toggleCollapsedTreeDirectoryId,
+} from './tree/tree-changes-state'
+import { getTreeDirectoryContextMenu } from './tree/tree-changes-context-menu'
+import { IChangesListItem } from './changes-list-types'
 
 const RowHeight = 29
+const TreeRowHeight = 27
 const StashIcon: OcticonSymbolVariant = {
   w: 16,
   h: 16,
@@ -224,6 +234,9 @@ interface IFilterChangesListProps {
   /** Whether or not to show the changes filter */
   readonly showChangesFilter: boolean
 
+  /** How changed files are displayed in the Changes tab */
+  readonly changesListViewMode: ChangesListViewMode
+
   /**
    * Whether or not to skip blocking commit hooks when creating commits
    * by means of passing the `--no-verify` flag to git commit
@@ -255,6 +268,7 @@ interface IFilterChangesListState {
   readonly selectedItems: ReadonlyArray<IChangesListItem>
   readonly focusedRow: string | null
   readonly groups: ReadonlyArray<IFilterListGroup<IChangesListItem>>
+  readonly collapsedTreeDirectoryIds: ReadonlySet<string>
 }
 
 function getSelectedItemsFromProps(
@@ -307,6 +321,7 @@ export class FilterChangesList extends React.Component<
   private includeAllCheckBoxRef = React.createRef<Checkbox>()
   private filterListRef =
     React.createRef<AugmentedSectionFilterList<IChangesListItem>>()
+  private treeListRef = React.createRef<TreeChangesList>()
 
   /** Compute the 'Include All' checkbox value */
   private getCheckAllValue = memoizeOne(
@@ -367,24 +382,40 @@ export class FilterChangesList extends React.Component<
       selectedItems: getSelectedItemsFromProps(props),
       focusedRow: null,
       groups,
+      collapsedTreeDirectoryIds: new Set<string>(),
     }
   }
 
   public componentWillReceiveProps(nextProps: IFilterChangesListProps) {
-    // No need to update state unless we haven't done it yet or the
-    // selected file id list has changed.
-    if (
-      !arrayEquals(nextProps.selectedFileIDs, this.props.selectedFileIDs) ||
-      !arrayEquals(
-        nextProps.workingDirectory.files,
-        this.props.workingDirectory.files
-      )
-    ) {
-      this.setState({
-        selectedItems: getSelectedItemsFromProps(nextProps),
-        groups: [this.createListItems(nextProps.workingDirectory.files)],
-      })
+    const selectedFileIDsChanged = !arrayEquals(
+      nextProps.selectedFileIDs,
+      this.props.selectedFileIDs
+    )
+    const workingDirectoryFilesChanged = !arrayEquals(
+      nextProps.workingDirectory.files,
+      this.props.workingDirectory.files
+    )
+
+    if (!selectedFileIDsChanged && !workingDirectoryFilesChanged) {
+      return
     }
+
+    const selectedItems = getSelectedItemsFromProps(nextProps)
+    const groups = workingDirectoryFilesChanged
+      ? [this.createListItems(nextProps.workingDirectory.files)]
+      : this.state.groups
+    const collapsedTreeDirectoryIds = workingDirectoryFilesChanged
+      ? pruneCollapsedTreeDirectoryIds(
+          this.state.collapsedTreeDirectoryIds,
+          nextProps.workingDirectory.files.map(file => file.path)
+        )
+      : this.state.collapsedTreeDirectoryIds
+
+    this.setState({
+      selectedItems,
+      groups,
+      collapsedTreeDirectoryIds,
+    })
   }
 
   private createListItems(
@@ -413,14 +444,11 @@ export class FilterChangesList extends React.Component<
 
   private renderChangedFile = (
     changeListItem: IChangesListItem,
-    matches: IMatches
+    matches: IMatches,
+    indentation = 0,
+    displayPath?: string
   ): JSX.Element | null => {
-    const {
-      rebaseConflictState,
-      isCommitting,
-      onIncludeChanged,
-      availableWidth,
-    } = this.props
+    const { rebaseConflictState, onIncludeChanged, availableWidth } = this.props
 
     const file = changeListItem.change
     const selection = file.selection.getSelectionType()
@@ -450,8 +478,7 @@ export class FilterChangesList extends React.Component<
       ? file.status.kind !== AppFileStatusKind.Untracked
       : includeAll
 
-    const disableSelection =
-      isCommitting || rebaseConflictState !== null || isUncommittableSubmodule
+    const disableSelection = this.isIncludeSelectionDisabled(file)
 
     const checkboxTooltip = isUncommittableSubmodule
       ? 'This submodule change cannot be added to a commit in this repository because it contains changes that have not been committed.'
@@ -469,6 +496,8 @@ export class FilterChangesList extends React.Component<
         disableSelection={disableSelection}
         checkboxTooltip={checkboxTooltip}
         focused={this.state.focusedRow === changeListItem.id}
+        indentation={indentation}
+        displayPath={displayPath}
         matches={matches}
       />
     )
@@ -483,6 +512,20 @@ export class FilterChangesList extends React.Component<
 
   private onStashChanges = () => {
     this.props.dispatcher.createStashForCurrentBranch(this.props.repository)
+  }
+
+  private isIncludeSelectionDisabled(file: WorkingDirectoryFileChange) {
+    const { submoduleStatus } = file.status
+    const isUncommittableSubmodule =
+      submoduleStatus !== undefined &&
+      file.status.kind === AppFileStatusKind.Modified &&
+      !submoduleStatus.commitChanged
+
+    return (
+      this.props.isCommitting ||
+      this.props.rebaseConflictState !== null ||
+      isUncommittableSubmodule
+    )
   }
 
   private onDiscardChanges = (files: ReadonlyArray<string>) => {
@@ -1227,9 +1270,113 @@ export class FilterChangesList extends React.Component<
   }
 
   private onFilterKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (this.filterListRef.current) {
+    if (this.props.changesListViewMode === ChangesListViewMode.Tree) {
+      this.treeListRef.current?.onFilterKeyDown(event)
+    } else if (this.filterListRef.current) {
       this.filterListRef.current.onKeyDown(event)
     }
+  }
+
+  private onTreeDirectoryToggled = (directoryId: string) => {
+    this.setState(prev => ({
+      collapsedTreeDirectoryIds: toggleCollapsedTreeDirectoryId(
+        prev.collapsedTreeDirectoryIds,
+        directoryId
+      ),
+    }))
+  }
+
+  private getTreeFilePathsFromItems = memoizeOne(
+    (items: ReadonlyArray<IChangesListItem>): ReadonlyArray<string> =>
+      items.map(item => item.change.path)
+  )
+
+  private getAllTreeFilePaths() {
+    return this.getTreeFilePathsFromItems(this.state.groups[0]?.items ?? [])
+  }
+
+  private getAllTreeDirectoryIds() {
+    return getTreeDirectoryIds(this.getAllTreeFilePaths())
+  }
+
+  private expandAllTreeDirectories = () => {
+    this.setState({ collapsedTreeDirectoryIds: new Set<string>() })
+  }
+
+  private collapseAllTreeDirectories = () => {
+    this.setState({
+      collapsedTreeDirectoryIds: this.getAllTreeDirectoryIds(),
+    })
+  }
+
+  private getDirectoryChangesFromFilterResults(directoryPath: string) {
+    // Folder actions use filter results, but ignore tree collapse.
+    const directoryChanges = new Array<WorkingDirectoryFileChange>()
+
+    this.state.filteredItems.forEach(item => {
+      if (isPathInDirectory(item.change.path, directoryPath)) {
+        directoryChanges.push(item.change)
+      }
+    })
+
+    return directoryChanges
+  }
+
+  private onExpandTreeDirectoryRecursively = (directoryPath: string) => {
+    const filePaths = this.getAllTreeFilePaths()
+    this.setState(prev => ({
+      collapsedTreeDirectoryIds: expandTreeDirectoryRecursively(
+        prev.collapsedTreeDirectoryIds,
+        filePaths,
+        directoryPath
+      ),
+    }))
+  }
+
+  private onCollapseTreeDirectoryRecursively = (directoryPath: string) => {
+    const filePaths = this.getAllTreeFilePaths()
+    this.setState(prev => ({
+      collapsedTreeDirectoryIds: collapseTreeDirectoryRecursively(
+        prev.collapsedTreeDirectoryIds,
+        filePaths,
+        directoryPath
+      ),
+    }))
+  }
+
+  private getDirectoryContextMenu(
+    directoryPath: string
+  ): ReadonlyArray<IMenuItem> {
+    const directoryChanges =
+      this.getDirectoryChangesFromFilterResults(directoryPath)
+    const isRebasing = this.props.rebaseConflictState !== null
+
+    return getTreeDirectoryContextMenu({
+      repository: this.props.repository,
+      directoryPath,
+      directoryChanges,
+      isRebasing,
+      askForConfirmationOnDiscardChanges:
+        this.props.askForConfirmationOnDiscardChanges,
+      isIncludeSelectionDisabled: file => this.isIncludeSelectionDisabled(file),
+      onExpandRecursively: this.onExpandTreeDirectoryRecursively,
+      onCollapseRecursively: this.onCollapseTreeDirectoryRecursively,
+      onIncludeChanged: this.props.onIncludeChanged,
+      onDiscardChanges: this.onDiscardChanges,
+      onIgnoreFile: this.props.onIgnoreFile,
+    })
+  }
+
+  private onTreeDirectoryContextMenu = (
+    directoryPath: string,
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    if (this.props.isCommitting) {
+      return
+    }
+
+    event.preventDefault()
+    showContextualMenu(this.getDirectoryContextMenu(directoryPath))
   }
 
   private renderFilterRow = () => {
@@ -1249,12 +1396,13 @@ export class FilterChangesList extends React.Component<
     const { workingDirectory, rebaseConflictState, isCommitting } = this.props
     const { files } = workingDirectory
 
-    const visibleFiles = this.state.filteredItems.size
+    const filteredItems = this.state.filteredItems
+    const visibleFiles = filteredItems.size
 
     const includeAllValue = this.getCheckAllValue(
       workingDirectory,
       rebaseConflictState,
-      this.state.filteredItems
+      filteredItems
     )
 
     const disableAllCheckbox =
@@ -1282,7 +1430,11 @@ export class FilterChangesList extends React.Component<
 
   private renderFilterBox = () => {
     if (!this.props.showChangesFilter) {
-      return null
+      return (
+        <div className="filter-box-container changes-list-view-only">
+          {this.renderViewModeToggle()}
+        </div>
+      )
     }
 
     return (
@@ -1309,6 +1461,77 @@ export class FilterChangesList extends React.Component<
           onKeyDown={this.onFilterKeyDown}
           value={this.props.fileListFilter.filterText}
         />
+        {this.renderViewModeToggle()}
+      </div>
+    )
+  }
+
+  private onFlatListViewButtonClick = () => {
+    this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Flat)
+  }
+
+  private onTreeViewButtonClick = () => {
+    this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Tree)
+  }
+
+  private onFlatListViewButtonContextMenu = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  private onTreeViewButtonContextMenu = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const hasDirectories = this.getAllTreeDirectoryIds().size > 0
+
+    showContextualMenu([
+      {
+        label: 'Expand All',
+        action: this.expandAllTreeDirectories,
+        enabled: hasDirectories,
+      },
+      {
+        label: 'Collapse All',
+        action: this.collapseAllTreeDirectories,
+        enabled: hasDirectories,
+      },
+    ])
+  }
+
+  private renderViewModeToggle() {
+    const mode = this.props.changesListViewMode
+
+    return (
+      <div
+        className="changes-list-view-toggle"
+        role="group"
+        aria-label="Changed files view"
+      >
+        <Button
+          className="changes-list-view-toggle-button"
+          onClick={this.onFlatListViewButtonClick}
+          onContextMenu={this.onFlatListViewButtonContextMenu}
+          ariaPressed={mode === ChangesListViewMode.Flat}
+          ariaLabel="Show changed files as a flat list"
+          tooltip="Flat list"
+        >
+          <Octicon symbol={octicons.listUnordered} />
+        </Button>
+        <Button
+          className="changes-list-view-toggle-button"
+          onClick={this.onTreeViewButtonClick}
+          onContextMenu={this.onTreeViewButtonContextMenu}
+          ariaPressed={mode === ChangesListViewMode.Tree}
+          ariaLabel="Show changed files as a tree"
+          tooltip="Tree view"
+        >
+          <Octicon symbol={octicons.fileDirectory} />
+        </Button>
       </div>
     )
   }
@@ -1326,63 +1549,104 @@ export class FilterChangesList extends React.Component<
     return `${formatNumber(files.length)} changed file${plural(files.length)}`
   }
 
-  public render() {
+  private renderFlatChangesList() {
     const { workingDirectory, isCommitting } = this.props
 
     return (
+      <AugmentedSectionFilterList<IChangesListItem>
+        ref={this.filterListRef}
+        id="changes-list"
+        rowHeight={RowHeight}
+        filterText={
+          this.props.showChangesFilter
+            ? this.props.fileListFilter.filterText
+            : ''
+        }
+        filterTextBox={this.filterTextBox}
+        onFilterListResultsChanged={this.onFilterListResultsChanged}
+        selectedItems={this.state.selectedItems}
+        selectionMode="multi"
+        renderItem={this.renderChangedFile}
+        onItemClick={this.onChangedFileClick}
+        onItemDoubleClick={this.onChangedFileDoubleClick}
+        onItemKeyboardFocus={this.onChangedFileFocus}
+        onItemBlur={this.onChangedFileBlur}
+        onScroll={this.onScroll}
+        setScrollTop={this.props.changesListScrollTop}
+        onItemKeyDown={this.onItemKeyDown}
+        onSelectionChanged={this.onFileSelectionChanged}
+        groups={this.state.groups}
+        filterMethod={
+          this.props.fileListFilter.isIncludedInCommit ||
+          this.props.fileListFilter.isNewFile ||
+          this.props.fileListFilter.isModifiedFile ||
+          this.props.fileListFilter.isDeletedFile ||
+          this.props.fileListFilter.isExcludedFromCommit
+            ? this.applyFilters
+            : undefined
+        }
+        invalidationProps={{
+          workingDirectory: workingDirectory,
+          isCommitting: isCommitting,
+          focusedRow: this.state.focusedRow,
+          showChangesFilter: this.props.showChangesFilter,
+          changesListViewMode: this.props.changesListViewMode,
+          filterNewFiles: this.props.fileListFilter.isNewFile,
+          filterModifiedFiles: this.props.fileListFilter.isModifiedFile,
+          filterDeletedFiles: this.props.fileListFilter.isDeletedFile,
+          filterExcludedFiles: this.props.fileListFilter.isExcludedFromCommit,
+        }}
+        onItemContextMenu={this.onItemContextMenu}
+        renderCustomFilterRow={this.renderFilterRow}
+        getGroupAriaLabel={this.getListAriaLabel}
+        renderNoItems={this.renderNoChanges}
+        postNoResultsMessage={getNoResultsMessage(this.props.fileListFilter)}
+      />
+    )
+  }
+
+  private renderTreeChangesList() {
+    const items = this.state.groups[0]?.items ?? []
+
+    return (
+      <>
+        {this.renderFilterRow()}
+        <TreeChangesList
+          ref={this.treeListRef}
+          items={items}
+          showChangesFilter={this.props.showChangesFilter}
+          fileListFilter={this.props.fileListFilter}
+          selectedItems={this.state.selectedItems}
+          focusedFileId={this.state.focusedRow}
+          collapsedDirectoryIds={this.state.collapsedTreeDirectoryIds}
+          rowHeight={TreeRowHeight}
+          availableWidth={this.props.availableWidth}
+          setScrollTop={this.props.changesListScrollTop}
+          onDirectoryToggled={this.onTreeDirectoryToggled}
+          onDirectoryContextMenu={this.onTreeDirectoryContextMenu}
+          onFileSelectionChanged={this.onFileSelectionChanged}
+          onFileClick={this.onChangedFileClick}
+          onFileDoubleClick={this.onChangedFileDoubleClick}
+          onFileKeyboardFocus={this.onChangedFileFocus}
+          onFileBlur={this.onChangedFileBlur}
+          onFileKeyDown={this.onItemKeyDown}
+          onFileContextMenu={this.onItemContextMenu}
+          onFilterListResultsChanged={this.onFilterListResultsChanged}
+          onScroll={this.onScroll}
+          renderFile={this.renderChangedFile}
+          renderNoItems={this.renderNoChanges}
+        />
+      </>
+    )
+  }
+
+  public render() {
+    return (
       <>
         <div className="changes-list-container file-list filtered-changes-list">
-          <AugmentedSectionFilterList<IChangesListItem>
-            ref={this.filterListRef}
-            id="changes-list"
-            rowHeight={RowHeight}
-            filterText={
-              this.props.showChangesFilter
-                ? this.props.fileListFilter.filterText
-                : ''
-            }
-            filterTextBox={this.filterTextBox}
-            onFilterListResultsChanged={this.onFilterListResultsChanged}
-            selectedItems={this.state.selectedItems}
-            selectionMode="multi"
-            renderItem={this.renderChangedFile}
-            onItemClick={this.onChangedFileClick}
-            onItemDoubleClick={this.onChangedFileDoubleClick}
-            onItemKeyboardFocus={this.onChangedFileFocus}
-            onItemBlur={this.onChangedFileBlur}
-            onScroll={this.onScroll}
-            setScrollTop={this.props.changesListScrollTop}
-            onItemKeyDown={this.onItemKeyDown}
-            onSelectionChanged={this.onFileSelectionChanged}
-            groups={this.state.groups}
-            filterMethod={
-              this.props.fileListFilter.isIncludedInCommit ||
-              this.props.fileListFilter.isNewFile ||
-              this.props.fileListFilter.isModifiedFile ||
-              this.props.fileListFilter.isDeletedFile ||
-              this.props.fileListFilter.isExcludedFromCommit
-                ? this.applyFilters
-                : undefined
-            }
-            invalidationProps={{
-              workingDirectory: workingDirectory,
-              isCommitting: isCommitting,
-              focusedRow: this.state.focusedRow,
-              showChangesFilter: this.props.showChangesFilter,
-              filterNewFiles: this.props.fileListFilter.isNewFile,
-              filterModifiedFiles: this.props.fileListFilter.isModifiedFile,
-              filterDeletedFiles: this.props.fileListFilter.isDeletedFile,
-              filterExcludedFiles:
-                this.props.fileListFilter.isExcludedFromCommit,
-            }}
-            onItemContextMenu={this.onItemContextMenu}
-            renderCustomFilterRow={this.renderFilterRow}
-            getGroupAriaLabel={this.getListAriaLabel}
-            renderNoItems={this.renderNoChanges}
-            postNoResultsMessage={getNoResultsMessage(
-              this.props.fileListFilter
-            )}
-          />
+          {this.props.changesListViewMode === ChangesListViewMode.Tree
+            ? this.renderTreeChangesList()
+            : this.renderFlatChangesList()}
         </div>
         {this.renderStashedChanges()}
         {this.renderHiddenChangesWarning()}
@@ -1519,7 +1783,6 @@ export class FilterChangesList extends React.Component<
       'appliesClearAllChangesListFilterCount'
     )
 
-    // Clear all filters including text filter
     this.props.dispatcher.setChangesListFilterText(this.props.repository, '')
     this.props.dispatcher.setIncludedChangesInCommitFilter(
       this.props.repository,

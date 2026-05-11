@@ -92,6 +92,15 @@
         margin-bottom: var(--spacing-half);
         transition: all 0.3s ease-out;
 
+        &:not(.changes-list-view-only) {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+
+          .filter-list-filter-field {
+            min-width: 0;
+          }
+        }
+
         input {
           border-radius: 0 var(--border-radius) var(--border-radius) 0;
         }
@@ -141,6 +150,51 @@
             }
           }
         }
+
+        &.changes-list-view-only {
+          justify-content: flex-start;
+
+          .changes-list-view-toggle {
+            margin-left: 0;
+          }
+        }
+
+        .changes-list-view-toggle {
+          display: flex;
+          flex-shrink: 0;
+          margin-left: var(--spacing-half);
+          background: var(--secondary-button-background);
+          border: 1px solid var(--secondary-button-border-color);
+          border-radius: var(--button-border-radius);
+
+          .changes-list-view-toggle-button {
+            width: 26px;
+            height: 22px;
+            padding: 0;
+            border: 0;
+            color: var(--text-secondary-color);
+            background: transparent;
+            border-radius: 0;
+
+            &[aria-pressed='true'] {
+              color: var(--text-color);
+              background-color: var(--box-selected-background-color);
+            }
+
+            &:first-child {
+              border-radius: calc(var(--button-border-radius) - 1px) 0 0 calc(var(--button-border-radius) - 1px);
+            }
+
+            &:last-child {
+              border-radius: 0 calc(var(--button-border-radius) - 1px) calc(var(--button-border-radius) - 1px) 0;
+            }
+
+            &:not([aria-disabled='true']):hover {
+              color: var(--text-color);
+              background-color: var(--secondary-button-hover-background);
+            }
+          }
+        }
       }
 
       .checkbox-container {
@@ -172,6 +226,108 @@
     // This is important when app is zoomed in. Otherwise, the filter list
     // will be overlapped by the commit message form.
     min-height: 0;
+  }
+
+  .changes-tree-list {
+    flex: 1;
+
+    .list-item {
+      border-bottom: 0;
+    }
+
+    .list-item.changes-tree-directory-list-item {
+      &:hover,
+      &:focus-within {
+        background: var(--list-item-hover-background-color);
+      }
+    }
+
+    .changes-tree-directory-row {
+      appearance: none;
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding-top: 0;
+      padding-right: var(--spacing);
+      padding-bottom: 0;
+      border: 0;
+      color: var(--text-secondary-color);
+      background: transparent;
+      font: inherit;
+      text-align: left;
+
+      &:focus {
+        outline: none;
+      }
+
+      .changes-tree-chevron {
+        flex-shrink: 0;
+        width: 12px;
+        height: 12px;
+        margin-right: 4px;
+      }
+
+      .changes-tree-directory-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: var(--text-color);
+
+        .path-text-component {
+          display: block;
+        }
+
+        mark {
+          font-weight: var(--font-weight-semibold);
+          color: var(--text-color);
+          background-color: inherit;
+        }
+      }
+
+      .changes-tree-directory-count {
+        flex-shrink: 0;
+        margin-left: auto;
+        padding-left: var(--spacing-half);
+        color: var(--text-secondary-color);
+        font-size: var(--font-size-sm);
+      }
+    }
+
+    .changes-tree-file-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+    }
+
+    .changes-tree-guide-cells {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: var(--spacing);
+      display: flex;
+      pointer-events: none;
+    }
+
+    .changes-tree-guide-cell {
+      position: relative;
+      width: 16px;
+      height: 100%;
+      flex: 0 0 16px;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 5.5px;
+        border-left: 1px solid var(--changes-tree-guide-color);
+      }
+    }
   }
 }
 

@@ -22,6 +22,12 @@ interface IPathTextProps {
 
   /** The characters in the file path to highlight */
   readonly matches?: IMatches
+
+  /**
+   * The outer element for the path text. Defaults to a div to preserve the
+   * existing layout, but inline surfaces can opt into a span.
+   */
+  readonly tagName?: 'div' | 'span'
 }
 
 interface IPathDisplayState {
@@ -249,7 +255,7 @@ export class PathText extends React.PureComponent<
   IPathTextProps,
   IPathTextState
 > {
-  private pathElementRef = createObservableRef<HTMLDivElement>()
+  private pathElementRef = createObservableRef<HTMLElement>()
   private pathInnerElement: HTMLSpanElement | null = null
 
   public constructor(props: IPathTextProps) {
@@ -338,8 +344,8 @@ export class PathText extends React.PureComponent<
       this.state.normalizedPath
     )
 
-    return (
-      <div className="path-text-component" ref={this.pathElementRef}>
+    const content = (
+      <>
         <span ref={this.onPathInnerElementRef}>
           {directoryElement}
           <span className="filename">{fileText}</span>
@@ -353,7 +359,15 @@ export class PathText extends React.PureComponent<
             {tooltipText}
           </Tooltip>
         )}
-      </div>
+      </>
+    )
+
+    const TagName = this.props.tagName ?? 'div'
+
+    return (
+      <TagName className="path-text-component" ref={this.pathElementRef}>
+        {content}
+      </TagName>
     )
   }
 

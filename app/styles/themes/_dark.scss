@@ -98,6 +98,11 @@ body.theme-dark {
    */
   --box-border-color: #141414;
 
+  /**
+   * Guide line color for the Changes tree view.
+   */
+  --changes-tree-guide-color: #{rgba($white, 0.10)};
+
   // slightly lighter of gray-500 to get 3:1 contrast ratio against
   // --box-alt-background-color
   --box-border-contrast-color: #{lighten($gray-500, 3%)};

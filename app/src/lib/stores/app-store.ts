@@ -172,6 +172,7 @@ import {
   IConstrainedValue,
   ICompareState,
   CommitOptions,
+  ChangesListViewMode,
 } from '../app-state'
 import {
   findEditorOrDefault,
@@ -584,6 +585,9 @@ const alwaysUseCopilotForConflictResolutionKey =
 
 export const showChangesFilterKey = 'show-changes-filter'
 
+export const changesListViewModeKey = 'changes-list-view-mode'
+export const changesListViewModeDefault = ChangesListViewMode.Flat
+
 // TODO: to be removed after the migration period. Now Copilot models are stored
 // per account, not globally.
 const selectedCopilotModelsKey = 'selected-copilot-models'
@@ -763,6 +767,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private copilotModelsByAccount: CopilotModelsByAccount = new Map()
   private copilotQuotaSnapshotsByAccount: CopilotQuotaSnapshotsByAccount =
     new Map()
+  private changesListViewMode: ChangesListViewMode = changesListViewModeDefault
   private byokProviders: ReadonlyArray<IBYOKProvider> = []
 
   public constructor(
@@ -1354,6 +1359,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       selectedCopilotModelsByAccount: this.selectedCopilotModelsByAccount,
       copilotModelsByAccount: this.copilotModelsByAccount,
       copilotQuotaSnapshotsByAccount: this.copilotQuotaSnapshotsByAccount,
+      changesListViewMode: this.changesListViewMode,
       byokProviders: this.byokProviders,
     }
   }
@@ -2646,6 +2652,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
       showChangesFilterKey,
       showChangesFilterDefault
     )
+
+    this.changesListViewMode =
+      getEnum(changesListViewModeKey, ChangesListViewMode) ??
+      changesListViewModeDefault
 
     this.selectedCopilotModelsByAccount =
       this.loadCopilotModelSelectionsByAccount()
@@ -10807,6 +10817,16 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.showChangesFilter = !this.showChangesFilter
     setBoolean(showChangesFilterKey, this.showChangesFilter)
     this.updateMenuLabelsForSelectedRepository()
+    this.emitUpdate()
+  }
+
+  public _setChangesListViewMode(mode: ChangesListViewMode) {
+    if (this.changesListViewMode === mode) {
+      return
+    }
+
+    this.changesListViewMode = mode
+    localStorage.setItem(changesListViewModeKey, mode)
     this.emitUpdate()
   }
 }

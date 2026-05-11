@@ -129,6 +129,11 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
    */
   --box-border-color: #{$gray-200};
 
+  /**
+   * Guide line color for the Changes tree view.
+   */
+  --changes-tree-guide-color: #{rgba($gray-700, 0.10)};
+
   // darkened version of gray-400 to get 3:1 contrast ratio against --box-alt-background-color
   --box-border-contrast-color: #{darken($gray-400, 5%)};
   --box-border-accent-color: #{$blue};

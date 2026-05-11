@@ -16,6 +16,7 @@ import {
   ChangesSelectionKind,
   IConstrainedValue,
   CommitOptions,
+  ChangesListViewMode,
 } from '../lib/app-state'
 import { Dispatcher } from './dispatcher'
 import { IssuesStore, GitHubUserStore } from '../lib/stores'
@@ -116,6 +117,9 @@ interface IRepositoryViewProps {
 
   /** Whether or not to show the changes filter */
   readonly showChangesFilter: boolean
+
+  /** How changed files are displayed in the Changes tab */
+  readonly changesListViewMode: ChangesListViewMode
 
   /**
    * Whether or not to skip blocking commit hooks when creating commits
@@ -320,6 +324,7 @@ export class RepositoryView extends React.Component<
         commitSpellcheckEnabled={this.props.commitSpellcheckEnabled}
         showCommitLengthWarning={this.props.showCommitLengthWarning}
         showChangesFilter={this.props.showChangesFilter}
+        changesListViewMode={this.props.changesListViewMode}
         skipCommitHooks={this.props.skipCommitHooks}
         signOffCommits={this.props.signOffCommits}
         allowEmptyCommit={this.props.allowEmptyCommit}

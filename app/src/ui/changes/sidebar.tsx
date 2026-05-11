@@ -8,6 +8,7 @@ import {
   isRebaseConflictState,
   ChangesSelectionKind,
   CommitOptions,
+  ChangesListViewMode,
 } from '../../lib/app-state'
 import { Repository } from '../../models/repository'
 import { Dispatcher } from '../dispatcher'
@@ -95,6 +96,9 @@ interface IChangesSidebarProps {
 
   /** Whether or not to show the changes filter */
   readonly showChangesFilter: boolean
+
+  /** How changed files are displayed in the Changes tab */
+  readonly changesListViewMode: ChangesListViewMode
 
   /**
    * Whether or not to skip blocking commit hooks when creating commits
@@ -491,6 +495,7 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
           accounts={this.props.accounts}
           fileListFilter={this.props.changes.fileListFilter}
           showChangesFilter={this.props.showChangesFilter}
+          changesListViewMode={this.props.changesListViewMode}
           skipCommitHooks={this.props.skipCommitHooks}
           signOffCommits={this.props.signOffCommits}
           allowEmptyCommit={this.props.allowEmptyCommit}

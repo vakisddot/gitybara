@@ -146,6 +146,13 @@ interface ISectionListProps {
   readonly selectedRows: ReadonlyArray<RowIndexPath>
 
   /**
+   * Whether the first selectable row should be selected when the list receives
+   * focus without a selected row. This can be disabled when the owner has a
+   * valid selection that is intentionally absent from the current row set.
+   */
+  readonly selectFirstRowOnFocus?: boolean
+
+  /**
    * Used to attach special classes to specific rows
    */
   readonly rowCustomClassNameMap?: Map<string, ReadonlyArray<RowIndexPath>>
@@ -416,7 +423,7 @@ export class SectionList extends React.Component<
   ISectionListState
 > {
   private fakeScroll: HTMLDivElement | null = null
-  private focusRow: RowIndexPath = InvalidRowIndexPath
+  private focusedRowIndexPath: RowIndexPath = InvalidRowIndexPath
 
   private readonly rowRefs = new RowRefsMap()
 
@@ -780,8 +787,11 @@ export class SectionList extends React.Component<
     // item is unmounted) so we mustn't attempt to refocus the previously
     // focused list item if it scrolls back into view.
     if (!focusWithin) {
-      this.focusRow = InvalidRowIndexPath
-    } else if (this.props.selectedRows.length === 0) {
+      this.focusedRowIndexPath = InvalidRowIndexPath
+    } else if (
+      this.props.selectedRows.length === 0 &&
+      (this.props.selectFirstRowOnFocus ?? true)
+    ) {
       const firstSelectableRowIndexPath = this.getFirstSelectableRowIndexPath()
       if (firstSelectableRowIndexPath !== null) {
         this.moveSelectionTo(firstSelectableRowIndexPath, { kind: 'focus' })
@@ -810,7 +820,7 @@ export class SectionList extends React.Component<
     index: RowIndexPath,
     e: React.FocusEvent<HTMLDivElement>
   ) => {
-    this.focusRow = index
+    this.focusedRowIndexPath = index
     this.props.onRowFocus?.(index, e)
   }
 
@@ -825,8 +835,8 @@ export class SectionList extends React.Component<
     index: RowIndexPath,
     e: React.FocusEvent<HTMLDivElement>
   ) => {
-    if (rowIndexPathEquals(this.focusRow, index)) {
-      this.focusRow = InvalidRowIndexPath
+    if (rowIndexPathEquals(this.focusedRowIndexPath, index)) {
+      this.focusedRowIndexPath = InvalidRowIndexPath
     }
     this.props.onRowBlur?.(index, e)
   }
@@ -1025,7 +1035,7 @@ export class SectionList extends React.Component<
     })
 
     if (moveFocus) {
-      this.focusRow = indexPath
+      this.focusedRowIndexPath = indexPath
       this.rowRefs.get(indexPath)?.focus({ preventScroll: true })
     }
   }
@@ -1148,7 +1158,7 @@ export class SectionList extends React.Component<
       this.rowRefs.set(rowIndex, element)
     }
 
-    if (rowIndexPathEquals(rowIndex, this.focusRow)) {
+    if (rowIndexPathEquals(rowIndex, this.focusedRowIndexPath)) {
       // The currently focused row is going being unmounted so we'll move focus
       // programmatically to the grid so that keyboard navigation still works
       if (element === null) {
@@ -1266,9 +1276,9 @@ export class SectionList extends React.Component<
           className={customClasses}
           renderRowFocusTooltip={this.props.renderRowFocusTooltip}
           hasKeyboardFocus={
-            this.focusRow !== InvalidRowIndexPath &&
-            this.focusRow.section === section &&
-            this.focusRow.row === indexPath.row
+            this.focusedRowIndexPath !== InvalidRowIndexPath &&
+            this.focusedRowIndexPath.section === section &&
+            this.focusedRowIndexPath.row === indexPath.row
           }
         />
       )
@@ -1813,6 +1823,18 @@ export class SectionList extends React.Component<
       //     element.focus()
       //   }
       // }
+    }
+  }
+
+  /**
+   * Explicitly put keyboard focus on a specific row.
+   *
+   * This method is a noop if the list has not yet been mounted or the row is
+   * outside the current row bounds.
+   */
+  public focusRow(indexPath: RowIndexPath) {
+    if (isValidRow(indexPath, this.props.rowCount)) {
+      this.scrollRowToVisible(indexPath)
     }
   }
 }

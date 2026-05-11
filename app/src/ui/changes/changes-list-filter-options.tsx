@@ -15,7 +15,7 @@ import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import memoizeOne from 'memoize-one'
 import { Button } from '../lib/button'
 import classNames from 'classnames'
-import { IChangesListItem } from './filter-changes-list'
+import { IChangesListItem } from './changes-list-types'
 import { WorkingDirectoryStatus } from '../../models/status'
 
 interface IChangesListFilterOptionsProps {

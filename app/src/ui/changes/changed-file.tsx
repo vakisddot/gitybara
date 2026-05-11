@@ -4,7 +4,11 @@ import { PathLabel } from '../lib/path-label'
 import { Octicon, iconForStatus } from '../octicons'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { mapStatus } from '../../lib/status'
-import { WorkingDirectoryFileChange } from '../../models/status'
+import {
+  AppFileStatus,
+  AppFileStatusKind,
+  WorkingDirectoryFileChange,
+} from '../../models/status'
 import { TooltipDirection } from '../lib/tooltip'
 import { TooltippedContent } from '../lib/tooltipped-content'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
@@ -13,16 +17,62 @@ import { IMatches } from '../../lib/fuzzy-find'
 interface IChangedFileProps {
   readonly file: WorkingDirectoryFileChange
   readonly include: boolean | null
+  readonly displayPath?: string
   readonly availableWidth: number
   readonly disableSelection: boolean
   readonly checkboxTooltip?: string
   readonly focused: boolean
+  readonly indentation?: number
   /** The characters in the file path to highlight */
   readonly matches?: IMatches
   readonly onIncludeChanged: (
     file: WorkingDirectoryFileChange,
     include: boolean
   ) => void
+}
+
+function getDirectoryName(path: string) {
+  const lastPathSeparatorIndex = path.lastIndexOf('/')
+  return lastPathSeparatorIndex === -1
+    ? ''
+    : path.substring(0, lastPathSeparatorIndex)
+}
+
+function getFileName(path: string) {
+  const lastPathSeparatorIndex = path.lastIndexOf('/')
+  return lastPathSeparatorIndex === -1
+    ? path
+    : path.substring(lastPathSeparatorIndex + 1)
+}
+
+export function getDisplayStatus(
+  status: AppFileStatus,
+  path: string,
+  displayPath: string
+): AppFileStatus {
+  if (path === displayPath) {
+    return status
+  }
+
+  if (
+    status.kind !== AppFileStatusKind.Renamed &&
+    status.kind !== AppFileStatusKind.Copied
+  ) {
+    return status
+  }
+
+  // Tree view renders the basename of the current path. Shorten the old path
+  // to its basename when both files live in the same directory, but keep the
+  // full old path otherwise so the user can still see where the file moved
+  // from.
+  if (getDirectoryName(status.oldPath) !== getDirectoryName(path)) {
+    return status
+  }
+
+  return {
+    ...status,
+    oldPath: getFileName(status.oldPath),
+  }
 }
 
 /** a changed file in the working directory for a given repository */
@@ -49,10 +99,13 @@ export class ChangedFile extends React.Component<IChangedFileProps, {}> {
       disableSelection,
       checkboxTooltip,
       focused,
+      indentation = 0,
+      displayPath = file.path,
       matches,
     } = this.props
     const { status, path } = file
     const fileStatus = mapStatus(status)
+    const displayStatus = getDisplayStatus(status, path, displayPath)
 
     const listItemPadding = 10 * 2
     const checkboxWidth = 20
@@ -62,6 +115,7 @@ export class ChangedFile extends React.Component<IChangedFileProps, {}> {
     const availablePathWidth =
       availableWidth -
       listItemPadding -
+      indentation -
       checkboxWidth -
       filePadding -
       statusWidth
@@ -78,7 +132,14 @@ export class ChangedFile extends React.Component<IChangedFileProps, {}> {
     )} ${includedText}`
 
     return (
-      <div className="file">
+      <div
+        className="file"
+        style={
+          indentation > 0
+            ? { paddingLeft: `calc(var(--spacing) + ${indentation}px)` }
+            : undefined
+        }
+      >
         <TooltippedContent
           tooltip={checkboxTooltip}
           direction={TooltipDirection.EAST}
@@ -96,8 +157,8 @@ export class ChangedFile extends React.Component<IChangedFileProps, {}> {
         </TooltippedContent>
 
         <PathLabel
-          path={path}
-          status={status}
+          path={displayPath}
+          status={displayStatus}
           availableWidth={availablePathWidth}
           ariaHidden={true}
           matches={matches}

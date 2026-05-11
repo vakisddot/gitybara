@@ -12,7 +12,7 @@ import {
   applyFilters,
 } from '../../src/ui/changes/filter-changes-logic'
 import { IFileListFilterState } from '../../src/lib/app-state'
-import { IChangesListItem } from '../../src/ui/changes/filter-changes-list'
+import { IChangesListItem } from '../../src/ui/changes/changes-list-types'
 
 // Helper function to create a test file
 function createTestFile(

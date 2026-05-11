@@ -1,5 +1,5 @@
 import { IFileListFilterState } from '../../lib/app-state'
-import { IChangesListItem } from './filter-changes-list'
+import { IChangesListItem } from './changes-list-types'
 import memoizeOne from 'memoize-one'
 
 /**
