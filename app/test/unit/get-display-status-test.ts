@@ -13,7 +13,11 @@ function renamed(oldPath: string): AppFileStatus {
 }
 
 function copied(oldPath: string): AppFileStatus {
-  return { kind: AppFileStatusKind.Copied, oldPath }
+  return {
+    kind: AppFileStatusKind.Copied,
+    oldPath,
+    renameIncludesModifications: false,
+  }
 }
 
 describe('getDisplayStatus', () => {
