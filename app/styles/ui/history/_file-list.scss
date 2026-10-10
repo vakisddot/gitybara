@@ -1,4 +1,50 @@
 #history {
+  .file-list-header {
+    display: flex;
+    align-items: center;
+
+    .file-list-count {
+      flex: 1;
+    }
+  }
+
+  .history-files-view-toggle {
+    display: flex;
+    flex-shrink: 0;
+    margin-left: var(--spacing-half);
+    background: var(--secondary-button-background);
+    border: 1px solid var(--secondary-button-border-color);
+    border-radius: var(--button-border-radius);
+
+    .button-component {
+      width: 26px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      color: var(--text-secondary-color);
+      background: transparent;
+      border-radius: 0;
+
+      &[aria-pressed='true'] {
+        color: var(--text-color);
+        background-color: var(--box-selected-background-color);
+      }
+
+      &:first-child {
+        border-radius: calc(var(--button-border-radius) - 1px) 0 0 calc(var(--button-border-radius) - 1px);
+      }
+
+      &:last-child {
+        border-radius: 0 calc(var(--button-border-radius) - 1px) calc(var(--button-border-radius) - 1px) 0;
+      }
+
+      &:hover {
+        color: var(--text-color);
+        background-color: var(--secondary-button-hover-background);
+      }
+    }
+  }
+
   .file-list {
     display: flex;
     flex: 1;

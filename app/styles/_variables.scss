@@ -132,12 +132,13 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
   /**
    * Guide line color for the Changes tree view.
    */
-  --changes-tree-guide-color: #{rgba($gray-700, 0.10)};
+  --changes-tree-guide-color: #{rgba($gray-700, 0.1)};
 
   /** The lines that show the levels of indentation in the IDE file viewer. */
   --ide-indent-guide-color: #{rgba($gray-700, 0.2)};
   // Like the diffs have for new lines, for lines that replace others
   --ide-modified-line-background: #{$yellow-100};
+  --ide-modified-text-background: #{$yellow-300};
 
   // darkened version of gray-400 to get 3:1 contrast ratio against --box-alt-background-color
   --box-border-contrast-color: #{darken($gray-400, 5%)};

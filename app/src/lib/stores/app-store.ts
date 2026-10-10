@@ -149,6 +149,7 @@ import {
 import { shell } from '../app-shell'
 import {
   CompareAction,
+  ComparisonMode,
   HistoryTabMode,
   Foldout,
   FoldoutType,
@@ -194,6 +195,7 @@ import {
   checkoutBranch,
   createCommit,
   getAuthorIdentity,
+  getBranches,
   getChangedFiles,
   getCommitDiff,
   getMergeBase,
@@ -257,6 +259,7 @@ import {
   IMatchedGitHubRepository,
   matchGitHubRepository,
   matchExistingRepository,
+  repositoryMatchesRemote,
   urlMatchesRemote,
 } from '../repository-matching'
 import { ForcePushBranchState, getCurrentBranchForcePushState } from '../rebase'
@@ -371,12 +374,12 @@ import {
   ShowSideBySideDiffDefault,
   getShowSideBySideDiff,
   setShowSideBySideDiff,
-} from '../../ui/lib/diff-mode'
-import {
-  abortCherryPick,
   ShowFullFileDiffDefault,
   getShowFullFileDiff,
   setShowFullFileDiff,
+} from '../../ui/lib/diff-mode'
+import {
+  abortCherryPick,
   cherryPick,
   CherryPickResult,
   continueCherryPick,
@@ -688,10 +691,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
   /** Whether or not the spellchecker is enabled for commit summary and description */
   private commitSpellcheckEnabled: boolean = commitSpellcheckEnabledDefault
   private showSideBySideDiff: boolean = ShowSideBySideDiffDefault
+  private showFullFileDiff: boolean = ShowFullFileDiffDefault
 
   private uncommittedChangesStrategy = defaultUncommittedChangesStrategy
 
-  private showFullFileDiff: boolean = ShowFullFileDiffDefault
   private selectedExternalEditor: string | null = null
 
   private resolvedExternalEditor: string | null = null
@@ -1317,10 +1320,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
       hideWhitespaceInHistoryDiff: this.hideWhitespaceInHistoryDiff,
       hideWhitespaceInPullRequestDiff: this.hideWhitespaceInPullRequestDiff,
       showSideBySideDiff: this.showSideBySideDiff,
+      showFullFileDiff: this.showFullFileDiff,
       selectedShell: this.selectedShell,
       repositoryFilterText: this.repositoryFilterText,
       resolvedExternalEditor: this.resolvedExternalEditor,
-      showFullFileDiff: this.showFullFileDiff,
       selectedCloneRepositoryTab: this.selectedCloneRepositoryTab,
       selectedBranchesTab: this.selectedBranchesTab,
       selectedTheme: this.selectedTheme,
@@ -1842,11 +1845,70 @@ export class AppStore extends TypedBaseStore<IAppState> {
     return assertNever(action, `Unknown action: ${kind}`)
   }
 
+  /** Select this branch's commits ahead of the current pull request's base. */
+  public async _showCurrentPullRequestCommits(repository: Repository) {
+    const { tip, currentPullRequest } =
+      this.repositoryStateCache.get(repository).branchesState
+    if (tip.kind !== TipState.Valid || currentPullRequest === null) {
+      return
+    }
+
+    const gitStore = this.gitStoreCache.get(repository)
+    const baseRemote = gitStore.remotes.find(remote =>
+      repositoryMatchesRemote(currentPullRequest.base.gitHubRepository, remote)
+    )
+    if (baseRemote === undefined) {
+      throw new Error(
+        `The base repository for PR #${currentPullRequest.pullRequestNumber} isn't available locally. Add it as a remote and fetch it to compare the changes.`
+      )
+    }
+
+    const baseRef = `refs/remotes/${baseRemote.name}/${currentPullRequest.base.ref}`
+    // The cached branch list hides remote branches tracked by a local branch.
+    // Read the remote ref directly so an outdated local base isn't used instead.
+    const branches = await gitStore.performFailableOperation(() =>
+      getBranches(repository, baseRef)
+    )
+    if (branches === undefined) {
+      return
+    }
+
+    const baseBranch = branches.find(branch => branch.ref === baseRef)
+    if (baseBranch === undefined) {
+      throw new Error(
+        `The base branch "${baseRemote.name}/${currentPullRequest.base.ref}" isn't available locally. Fetch the base repository and try again.`
+      )
+    }
+
+    const currentTip =
+      this.repositoryStateCache.get(repository).branchesState.tip
+    if (
+      !tipEquals(tip, currentTip) ||
+      currentTip.kind !== TipState.Valid ||
+      currentTip.branch.name !== tip.branch.name
+    ) {
+      return
+    }
+
+    this._updateCompareForm(repository, { showBranchList: false })
+    await this.updateCompareToBranch(
+      repository,
+      {
+        kind: HistoryTabMode.Compare,
+        comparisonMode: ComparisonMode.Ahead,
+        branch: baseBranch,
+      },
+      true
+    )
+  }
+
   private async updateCompareToBranch(
     repository: Repository,
-    action: ICompareToBranch
+    action: ICompareToBranch,
+    selectAllCommits: boolean = false
   ) {
     const gitStore = this.gitStoreCache.get(repository)
+    const initialTip = gitStore.tip
 
     const comparisonBranch = action.branch
     const compare = await gitStore.getCompareCommits(
@@ -1865,6 +1927,16 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     if (compare == null) {
+      return
+    }
+
+    if (
+      selectAllCommits &&
+      (!tipEquals(initialTip, gitStore.tip) ||
+        (initialTip.kind === TipState.Valid &&
+          gitStore.tip.kind === TipState.Valid &&
+          initialTip.branch.name !== gitStore.tip.branch.name))
+    ) {
       return
     }
 
@@ -1898,7 +1970,12 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.emitUpdate()
 
-    this.updateOrSelectFirstCommit(repository, commitSHAs)
+    if (selectAllCommits) {
+      this._changeCommitSelection(repository, commitSHAs, true)
+      await this._loadChangedFilesForCurrentSelection(repository)
+    } else {
+      this.updateOrSelectFirstCommit(repository, commitSHAs)
+    }
 
     if (this.currentMergeTreePromise != null) {
       return this.currentMergeTreePromise
@@ -2572,6 +2649,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       commitSpellcheckEnabledDefault
     )
     this.showSideBySideDiff = getShowSideBySideDiff()
+    this.showFullFileDiff = getShowFullFileDiff()
 
     this.selectedTheme = getPersistedThemeName()
     // Make sure the persisted theme is applied
@@ -2649,7 +2727,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     this.alwaysUseCopilotForConflictResolution = getBoolean(
-    this.showFullFileDiff = getShowFullFileDiff()
       alwaysUseCopilotForConflictResolutionKey,
       false
     )
@@ -7988,6 +8065,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
   }
 
+  public _setShowFullFileDiff(showFullFileDiff: boolean) {
+    if (showFullFileDiff !== this.showFullFileDiff) {
+      setShowFullFileDiff(showFullFileDiff)
+      this.showFullFileDiff = showFullFileDiff
+      this.emitUpdate()
+    }
+  }
+
   public _setUpdateBannerVisibility(visibility: boolean) {
     this.isUpdateAvailableBannerVisible = visibility
 
@@ -8065,14 +8150,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
   public _beginEnterpriseSignIn(
     resultCallback?: (result: SignInResult) => void
   ) {
-  public _setShowFullFileDiff(showFullFileDiff: boolean) {
-    if (showFullFileDiff !== this.showFullFileDiff) {
-      setShowFullFileDiff(showFullFileDiff)
-      this.showFullFileDiff = showFullFileDiff
-      this.emitUpdate()
-    }
-  }
-
     return this.signInStore.beginEnterpriseSignIn(resultCallback)
   }
 

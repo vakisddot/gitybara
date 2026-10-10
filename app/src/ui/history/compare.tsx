@@ -34,6 +34,8 @@ import { KeyboardInsertionData } from '../lib/list'
 import { Account } from '../../models/account'
 import { Emoji } from '../../lib/emoji'
 import { formatNumber } from '../../lib/format-number'
+import { PullRequest } from '../../models/pull-request'
+import { Button } from '../lib/button'
 
 interface ICompareSidebarProps {
   readonly repository: Repository
@@ -45,6 +47,7 @@ interface ICompareSidebarProps {
   readonly askForConfirmationOnCheckoutCommit: boolean
   readonly dispatcher: Dispatcher
   readonly currentBranch: Branch | null
+  readonly currentPullRequest: PullRequest | null
   readonly selectedCommitShas: ReadonlyArray<string>
   readonly onRevertCommit: (commit: Commit) => void
   readonly onAmendCommit: (commit: Commit, isLocalCommit: boolean) => void
@@ -70,6 +73,7 @@ interface ICompareSidebarState {
    * For all other cases, use the prop
    */
   readonly focusedBranch: Branch | null
+  readonly isSelectingPullRequestCommits: boolean
 
   /** Data to be reordered via keyboard */
   readonly keyboardReorderData?: KeyboardInsertionData
@@ -88,11 +92,15 @@ export class CompareSidebar extends React.Component<
   private commitListRef = React.createRef<CommitList>()
   private loadingMoreCommitsPromise: Promise<void> | null = null
   private resultCount = 0
+  private unmounted = false
 
   public constructor(props: ICompareSidebarProps) {
     super(props)
 
-    this.state = { focusedBranch: null }
+    this.state = {
+      focusedBranch: null,
+      isSelectingPullRequestCommits: false,
+    }
   }
 
   public componentWillReceiveProps(nextProps: ICompareSidebarProps) {
@@ -150,6 +158,7 @@ export class CompareSidebar extends React.Component<
   }
 
   public componentWillUnmount() {
+    this.unmounted = true
     this.textbox = null
 
     // by hiding the branch list here when the component is torn down
@@ -179,11 +188,51 @@ export class CompareSidebar extends React.Component<
             onKeyDown={this.onBranchFilterKeyDown}
             onSearchCleared={this.handleEscape}
           />
+          {this.renderPullRequestCommitsButton()}
         </div>
 
         {showBranchList ? this.renderFilterList() : this.renderCommits()}
       </div>
     )
+  }
+
+  private renderPullRequestCommitsButton() {
+    const { currentPullRequest, currentBranch } = this.props
+    if (currentPullRequest === null || currentBranch === null) {
+      return null
+    }
+
+    return (
+      <Button
+        className="pull-request-commits-button"
+        onClick={this.onShowPullRequestCommits}
+        disabled={
+          this.state.isSelectingPullRequestCommits ||
+          this.props.isMultiCommitOperationInProgress
+        }
+        tooltip={`Show this branch's combined changes against ${currentPullRequest.base.ref}`}
+      >
+        Show PR #{currentPullRequest.pullRequestNumber} changes
+      </Button>
+    )
+  }
+
+  private onShowPullRequestCommits = async () => {
+    if (this.state.isSelectingPullRequestCommits) {
+      return
+    }
+
+    const { dispatcher, repository } = this.props
+    this.setState({ isSelectingPullRequestCommits: true })
+    try {
+      await dispatcher.showCurrentPullRequestCommits(repository)
+    } catch (error) {
+      await defaultErrorHandler(error, dispatcher)
+    } finally {
+      if (!this.unmounted) {
+        this.setState({ isSelectingPullRequestCommits: false })
+      }
+    }
   }
 
   private onBranchesListRef = (branchList: BranchList | null) => {

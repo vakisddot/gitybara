@@ -1,7 +1,12 @@
 import * as React from 'react'
 import memoizeOne from 'memoize-one'
 
-import { getBoolean, setBoolean } from '../../../lib/local-storage'
+import {
+  getBoolean,
+  getNumber,
+  setBoolean,
+  setNumber,
+} from '../../../lib/local-storage'
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
 import { AppFileStatus } from '../../../models/status'
@@ -14,6 +19,7 @@ import { PathText } from '../../lib/path-text'
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { IdeCodeEditor } from './ide-code-editor'
+import { PreviousLinesMode } from './ide-previous-lines'
 import {
   IdeFileContents,
   isHighlightable,
@@ -36,6 +42,8 @@ import {
 const ReloadDelay = 200
 
 const HighlightChangesKey = 'ide-highlight-changes'
+const UnchangedTextOpacityKey = 'ide-unchanged-text-opacity'
+const HoverPreviousLinesKey = 'ide-hover-previous-lines'
 
 /** Edits that weren't saved and the text of the file they were made to. */
 interface IDraft {
@@ -112,6 +120,10 @@ interface IIdeFileViewerState {
 
   /** Whether the lines that have changes have a color in the background */
   readonly highlightChanges: boolean
+
+  /** How visible unchanged text is, as a percentage */
+  readonly unchangedTextOpacity: number
+  readonly previousLinesMode: PreviousLinesMode
 }
 
 /** A file of the repository to read and edit, without any of the diff. */
@@ -144,6 +156,13 @@ export class IdeFileViewer extends React.Component<
       changedOnDisk: false,
       saveError: null,
       highlightChanges: getBoolean(HighlightChangesKey, false),
+      previousLinesMode: getBoolean(HoverPreviousLinesKey, false)
+        ? 'hover'
+        : 'ghost',
+      unchangedTextOpacity: Math.max(
+        0,
+        Math.min(100, getNumber(UnchangedTextOpacityKey, 100))
+      ),
     }
   }
 
@@ -475,7 +494,24 @@ export class IdeFileViewer extends React.Component<
     this.setState({ highlightChanges })
   }
 
+  private onUnchangedTextOpacityChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const unchangedTextOpacity = event.currentTarget.valueAsNumber
+
+    setNumber(UnchangedTextOpacityKey, unchangedTextOpacity)
+    this.setState({ unchangedTextOpacity })
+  }
+
   private onPreviousChange = () => this.goToChange(-1)
+  private onPreviousLinesModeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const previousLinesMode =
+      event.currentTarget.value === 'hover' ? 'hover' : 'ghost'
+    setBoolean(HoverPreviousLinesKey, previousLinesMode === 'hover')
+    this.setState({ previousLinesMode })
+  }
   private onNextChange = () => this.goToChange(1)
   private onFoldAll = () => this.editorRef.current?.foldAll()
   private onUnfoldAll = () => this.editorRef.current?.unfoldAll()
@@ -517,6 +553,33 @@ export class IdeFileViewer extends React.Component<
         >
           <Octicon symbol={octicons.paintbrush} />
         </Button>
+        <label className="ide-file-viewer-opacity">
+          <span>Unchanged</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={this.state.unchangedTextOpacity}
+            onChange={this.onUnchangedTextOpacityChange}
+            aria-label="Unchanged text opacity"
+            aria-valuetext={`${this.state.unchangedTextOpacity}% visible`}
+          />
+          <span className="ide-file-viewer-opacity-value">
+            {this.state.unchangedTextOpacity}%
+          </span>
+        </label>
+        {this.state.lineChanges.previousLines.length > 0 && (
+          <select
+            className="ide-file-viewer-previous-mode"
+            aria-label="Previous lines display"
+            value={this.state.previousLinesMode}
+            onChange={this.onPreviousLinesModeChange}
+          >
+            <option value="ghost">Ghost lines</option>
+            <option value="hover">Hover preview</option>
+          </select>
+        )}
       </div>
     )
   }
@@ -661,6 +724,8 @@ export class IdeFileViewer extends React.Component<
             highlight={isHighlightable(lines)}
             readOnly={isDeleted || this.props.readOnly === true}
             highlightChanges={this.state.highlightChanges}
+            unchangedTextOpacity={this.state.unchangedTextOpacity}
+            previousLinesMode={this.state.previousLinesMode}
             lineChanges={lineChanges}
             onDirtyChange={this.onDirtyChange}
             onSave={this.onSave}

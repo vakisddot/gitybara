@@ -104,6 +104,7 @@ body.theme-dark {
   --changes-tree-guide-color: #{rgba($white, 0.1)};
   --ide-indent-guide-color: #{rgba($white, 0.14)};
   --ide-modified-line-background: #{rgba($yellow-700, 0.22)};
+  --ide-modified-text-background: #{rgba($yellow-700, 0.48)};
 
   // slightly lighter of gray-500 to get 3:1 contrast ratio against
   // --box-alt-background-color

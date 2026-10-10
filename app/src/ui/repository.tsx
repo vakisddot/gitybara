@@ -372,6 +372,7 @@ export class RepositoryView extends React.Component<
         selectedCommitShas={shas}
         shasToHighlight={compareState.shasToHighlight}
         currentBranch={currentBranch}
+        currentPullRequest={branchesState.currentPullRequest}
         emoji={emoji}
         commitLookup={commitLookup}
         localCommitSHAs={localCommitSHAs}
@@ -522,9 +523,9 @@ export class RepositoryView extends React.Component<
         onViewCommitOnGitHub={this.props.onViewCommitOnGitHub}
         hideWhitespaceInDiff={this.props.hideWhitespaceInHistoryDiff}
         showSideBySideDiff={this.props.showSideBySideDiff}
-        onOpenBinaryFile={this.onOpenBinaryFile}
         showFullFileDiff={this.props.showFullFileDiff}
         tabSize={this.props.selectedTabSize}
+        onOpenBinaryFile={this.onOpenBinaryFile}
         onOpenSubmodule={this.onOpenSubmodule}
         onChangeImageDiffType={this.onChangeImageDiffType}
         onDiffOptionsOpened={this.onDiffOptionsOpened}
@@ -572,8 +573,8 @@ export class RepositoryView extends React.Component<
     if (this.props.changesListViewMode === ChangesListViewMode.Ide) {
       return (
         <IdeFileViewer
-          repository={this.props.repository}
           key="ide-view"
+          repository={this.props.repository}
           path={changesState.ideSelectedFilePath}
           changedFiles={workingDirectory.files}
           tabSize={this.props.selectedTabSize}
@@ -620,7 +621,6 @@ export class RepositoryView extends React.Component<
         return null
       }
 
-      return (
       // Show the whole file, as the IDE view does, where there is text to show
       if (this.props.showFullFileDiff && diff?.kind === DiffType.Text) {
         return (
@@ -636,6 +636,7 @@ export class RepositoryView extends React.Component<
         )
       }
 
+      return (
         <Changes
           repository={this.props.repository}
           dispatcher={this.props.dispatcher}
@@ -645,10 +646,10 @@ export class RepositoryView extends React.Component<
           imageDiffType={this.props.imageDiffType}
           hideWhitespaceInDiff={this.props.hideWhitespaceInChangesDiff}
           showSideBySideDiff={this.props.showSideBySideDiff}
-          showDiffCheckMarks={this.props.showDiffCheckMarks}
           // Text files are shown in full above, so this is for other kinds
           showFullFile={false}
           onShowFullFileChanged={this.onShowFullFileChanged}
+          showDiffCheckMarks={this.props.showDiffCheckMarks}
           onOpenBinaryFile={this.onOpenBinaryFile}
           onOpenSubmodule={this.onOpenSubmodule}
           onChangeImageDiffType={this.onChangeImageDiffType}
@@ -661,7 +662,6 @@ export class RepositoryView extends React.Component<
     }
   }
 
-  private onOpenBinaryFile = (fullPath: string) => {
   private renderChangesDiffOptions() {
     return (
       <DiffOptions
@@ -685,6 +685,7 @@ export class RepositoryView extends React.Component<
     this.props.dispatcher.onShowFullFileDiffChanged(showFullFile)
   }
 
+  private onOpenBinaryFile = (fullPath: string) => {
     openFile(fullPath, this.props.dispatcher)
   }
 

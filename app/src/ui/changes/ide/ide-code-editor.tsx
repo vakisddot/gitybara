@@ -3,6 +3,7 @@ import * as Path from 'path'
 import CodeMirror from 'codemirror'
 import 'codemirror/addon/fold/foldcode'
 import 'codemirror/addon/fold/foldgutter'
+import 'codemirror/addon/selection/active-line'
 import 'codemirror/mode/meta'
 
 import { getFoldRanges, getFoldRangesByStart, IFoldRange } from './ide-folding'
@@ -11,7 +12,8 @@ import {
   getIndentGuidesStyle,
   getLineIndentation,
 } from './ide-indentation'
-import { ILineChanges } from './ide-line-changes'
+import { IInlineChange, ILineChanges } from './ide-line-changes'
+import { IdePreviousLines, PreviousLinesMode } from './ide-previous-lines'
 
 /** Padding to the left of the text of a line, keep in sync with the styles. */
 const TextPadding = 12
@@ -66,6 +68,11 @@ interface IIdeCodeEditorProps {
   /** Whether to also give those lines a color in the background */
   readonly highlightChanges: boolean
 
+  /** How visible unchanged text is, as a percentage */
+  readonly unchangedTextOpacity: number
+
+  readonly previousLinesMode: PreviousLinesMode
+
   /** Called when the text starts or stops differing from the saved text. */
   readonly onDirtyChange: (isDirty: boolean) => void
 
@@ -104,11 +111,14 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   private cleanGeneration = 0
   private isDirty = false
   private modeRequestId = 0
+  private previousLines: IdePreviousLines | null = null
+  private inlineChanges: ReadonlyArray<IInlineChange> | null = null
+  private inlineMarks = new Array<CodeMirror.TextMarker>()
 
   /** The classes added to the lines to mark the changes, to take them off */
   private changeClasses = new Array<{
     readonly handle: CodeMirror.LineHandle
-    readonly where: 'gutter' | 'background'
+    readonly where: 'gutter' | 'background' | 'text'
     readonly className: string
   }>()
 
@@ -143,6 +153,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       indentUnit: tabSize,
       indentWithTabs: false,
       readOnly,
+      styleActiveLine: !readOnly,
       lineWrapping: false,
       viewportMargin: 20,
       gutters: ['CodeMirror-linenumbers', FoldGutter],
@@ -165,6 +176,8 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     })
 
     this.editor = editor
+    this.previousLines = new IdePreviousLines(editor, container)
+    this.previousLines.setMode(this.props.previousLinesMode)
     editor.on('renderLine', this.onRenderLine)
     editor.on('changes', this.onChanges)
     editor.on('update', this.onUpdate)
@@ -193,11 +206,15 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     if (prevProps.tabSize !== tabSize) {
       editor.setOption('tabSize', tabSize)
       editor.setOption('indentUnit', tabSize)
+      this.previousLines?.refresh()
     }
 
     if (prevProps.readOnly !== readOnly) {
       editor.setOption('readOnly', readOnly)
+      editor.setOption('styleActiveLine', !readOnly)
     }
+
+    this.previousLines?.setMode(this.props.previousLinesMode)
 
     if (prevProps.path !== path || prevProps.highlight !== highlight) {
       this.applyMode()
@@ -220,6 +237,9 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.ruler = null
 
     this.modeRequestId++
+    this.clearInlineChanges()
+    this.previousLines?.destroy()
+    this.previousLines = null
     this.editor = null
     this.containerRef.current?.replaceChildren()
   }
@@ -552,6 +572,8 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.lastJump = null
     this.analysis = null
     this.changeClasses = []
+    this.previousLines?.clear()
+    this.clearInlineChanges()
 
     editor.operation(() => {
       editor.setValue(text)
@@ -585,6 +607,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     }
 
     editor.setOption('mode', 'text/plain')
+    this.previousLines?.refresh()
 
     if (!highlight) {
       return
@@ -594,7 +617,14 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     if (this.editor === editor && requestId === this.modeRequestId) {
       editor.setOption('mode', mode ?? 'text/plain')
+      this.previousLines?.refresh()
     }
+  }
+
+  private clearInlineChanges() {
+    this.inlineMarks.forEach(mark => mark.clear())
+    this.inlineMarks = []
+    this.inlineChanges = null
   }
 
   /** Mark the lines that differ from the committed version in the gutter. */
@@ -617,7 +647,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
       const mark = (
         line: number,
-        where: 'gutter' | 'background',
+        where: 'gutter' | 'background' | 'text',
         className: string
       ) => {
         if (line >= 0 && line < lineCount) {
@@ -631,6 +661,8 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
       added.forEach(line => mark(line, 'gutter', 'change-added'))
       modified.forEach(line => mark(line, 'gutter', 'change-modified'))
+      added.forEach(line => mark(line, 'text', 'ide-changed-line'))
+      modified.forEach(line => mark(line, 'text', 'ide-changed-line'))
 
       if (this.props.highlightChanges) {
         added.forEach(line => mark(line, 'background', 'change-added-line'))
@@ -651,9 +683,25 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
           ? mark(lineCount - 1, 'gutter', 'change-removed-after')
           : mark(line, 'gutter', 'change-removed-before')
       )
+
+      const { inlineChanges } = this.props.lineChanges
+      if (this.inlineChanges !== inlineChanges) {
+        this.clearInlineChanges()
+        this.inlineChanges = inlineChanges
+        for (const { line, start, end } of inlineChanges) {
+          this.inlineMarks.push(
+            editor.markText(
+              CodeMirror.Pos(line, start),
+              CodeMirror.Pos(line, end),
+              { className: 'ide-inline-change' }
+            )
+          )
+        }
+      }
     })
 
     this.scheduleRuler()
+    this.previousLines?.setBlocks(this.props.lineChanges.previousLines)
   }
 
   /**
@@ -677,9 +725,21 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   public render() {
+    const { lineChanges, unchangedTextOpacity } = this.props
+    const hasChanges =
+      lineChanges.added.size > 0 ||
+      lineChanges.modified.size > 0 ||
+      lineChanges.removedBefore.size > 0
+    const style = {
+      '--ide-unchanged-text-opacity': hasChanges
+        ? unchangedTextOpacity / 100
+        : 1,
+    } as React.CSSProperties
+
     return (
       <div
         className="ide-code-editor"
+        style={style}
         ref={this.containerRef}
         onMouseOver={this.onMouseOver}
         onMouseLeave={this.onMouseLeave}

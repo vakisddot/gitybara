@@ -2588,6 +2588,11 @@ export class Dispatcher {
     return this.appStore._executeCompare(repository, action)
   }
 
+  /** Compare the current branch to its PR base and select all ahead commits. */
+  public showCurrentPullRequestCommits(repository: Repository) {
+    return this.appStore._showCurrentPullRequestCommits(repository)
+  }
+
   /** Update the compare form state for the current repository */
   public updateCompareForm<K extends keyof ICompareFormUpdate>(
     repository: Repository,

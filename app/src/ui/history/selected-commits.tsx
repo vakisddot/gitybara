@@ -40,6 +40,12 @@ import { DiffOptions } from '../diff/diff-options'
 import { IdeFileViewer } from '../changes/ide/ide-file-viewer'
 import { Account } from '../../models/account'
 import { Emoji } from '../../lib/emoji'
+import { getBoolean, setBoolean } from '../../lib/local-storage'
+import { Button } from '../lib/button'
+import { Octicon } from '../octicons'
+import * as octicons from '../octicons/octicons.generated'
+
+const HistoryFilesTreeViewKey = 'history-files-tree-view'
 
 interface ISelectedCommitsProps {
   readonly repository: Repository
@@ -103,6 +109,7 @@ interface ISelectedCommitsProps {
 
 interface ISelectedCommitsState {
   readonly isExpanded: boolean
+  readonly showFilesAsTree: boolean
 }
 
 /** The History component. Contains the commit list, commit summary, and diff. */
@@ -117,6 +124,7 @@ export class SelectedCommits extends React.Component<
 
     this.state = {
       isExpanded: false,
+      showFilesAsTree: getBoolean(HistoryFilesTreeViewKey, false),
     }
   }
 
@@ -328,6 +336,7 @@ export class SelectedCommits extends React.Component<
         {this.renderFileHeader()}
         <FileList
           files={files}
+          showTree={this.state.showFilesAsTree}
           onSelectedFileChanged={this.onFileSelected}
           selectedFile={this.props.selectedFile}
           availableWidth={availableWidth}
@@ -343,9 +352,41 @@ export class SelectedCommits extends React.Component<
     const filesPlural = fileCount === 1 ? 'file' : 'files'
     return (
       <div className="file-list-header">
-        {fileCount} changed {filesPlural}
+        <span className="file-list-count">
+          {fileCount} changed {filesPlural}
+        </span>
+        <div
+          className="history-files-view-toggle"
+          role="group"
+          aria-label="Changed files view"
+        >
+          <Button
+            onClick={this.onFlatListViewClick}
+            ariaPressed={!this.state.showFilesAsTree}
+            ariaLabel="Show changed files as a flat list"
+            tooltip="Flat list"
+          >
+            <Octicon symbol={octicons.listUnordered} />
+          </Button>
+          <Button
+            onClick={this.onTreeViewClick}
+            ariaPressed={this.state.showFilesAsTree}
+            ariaLabel="Show changed files as a tree"
+            tooltip="Tree view"
+          >
+            <Octicon symbol={octicons.fileDirectory} />
+          </Button>
+        </div>
       </div>
     )
+  }
+
+  private onFlatListViewClick = () => this.setFilesTreeView(false)
+  private onTreeViewClick = () => this.setFilesTreeView(true)
+
+  private setFilesTreeView(showFilesAsTree: boolean) {
+    setBoolean(HistoryFilesTreeViewKey, showFilesAsTree)
+    this.setState({ showFilesAsTree })
   }
 
   /**
