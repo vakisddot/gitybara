@@ -24,6 +24,15 @@ import {
 } from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
+import {
+  getFoldRanges,
+  getFoldRangesByStart,
+  getVisibleIndexOfLine,
+  getVisibleLines,
+  IFoldRange,
+  pruneFoldedLines,
+  unfoldBlocksHiding,
+} from './ide-folding'
 import { detectIndentUnit, getLineIndentation } from './ide-indentation'
 import {
   getChangeGroupStarts,
@@ -44,6 +53,9 @@ const GutterPadding = 12
 
 /** Padding to the left of the text of a line, keep in sync with the styles. */
 const TextPadding = 12
+
+/** The width of the column of the gutter with the buttons to fold blocks. */
+const FoldColumnWidth = 16
 
 /** How long to wait after the changes updated before reading the file again */
 const ReloadDelay = 200
@@ -78,6 +90,12 @@ interface IIdeFileViewerState {
   /** The lines that differ from the committed version, to mark in the gutter */
   readonly lineChanges: ILineChanges
 
+  /**
+   * The blocks that are folded, by the line they start on, with the text of
+   * that line to tell if it's still the same block after the file changed.
+   */
+  readonly folded: ReadonlyMap<number, string>
+
   /** The width in pixels of a character in the monospace font. */
   readonly characterWidth: number
 }
@@ -100,7 +118,7 @@ export class IdeFileViewer extends React.Component<
 
   /** Where the last jump to a change went, to continue from there */
   private lastJump: {
-    readonly row: number
+    readonly line: number
     readonly scrollTop: number
   } | null = null
 
@@ -112,6 +130,7 @@ export class IdeFileViewer extends React.Component<
       failed: false,
       tokens: null,
       lineChanges: NoLineChanges,
+      folded: new Map<number, string>(),
       characterWidth: 7,
     }
   }
@@ -131,6 +150,7 @@ export class IdeFileViewer extends React.Component<
         failed: false,
         tokens: null,
         lineChanges: NoLineChanges,
+        folded: new Map<number, string>(),
       })
       this.loadContents()
     } else if (prevProps.changedFiles !== this.props.changedFiles) {
@@ -206,6 +226,14 @@ export class IdeFileViewer extends React.Component<
         lineChanges,
         failed: false,
         tokens: contentsChanged ? null : prevState.tokens,
+        folded:
+          contents.kind === 'text'
+            ? pruneFoldedLines(
+                prevState.folded,
+                contents.lines,
+                this.getFolding(contents.lines, this.props.tabSize).byStart
+              )
+            : new Map<number, string>(),
       }))
 
       if (contentsChanged) {
@@ -316,48 +344,144 @@ export class IdeFileViewer extends React.Component<
     }
   }
 
-  /** The row that "next change" and "previous change" go on from. */
-  private getReferenceRow() {
+  private getFolding = memoizeOne(
+    (lines: ReadonlyArray<string>, tabSize: number) => {
+      const ranges = getFoldRanges(lines, tabSize)
+      return { ranges, byStart: getFoldRangesByStart(ranges) }
+    }
+  )
+
+  private getVisible = memoizeOne(
+    (
+      lineCount: number,
+      byStart: ReadonlyMap<number, IFoldRange>,
+      folded: ReadonlyMap<number, string>
+    ) => getVisibleLines(lineCount, byStart, folded)
+  )
+
+  /** The lines of the file with which of them are shown and can be folded. */
+  private getLayout() {
+    const lines = this.getLines()
+
+    if (lines === null) {
+      return null
+    }
+
+    const folding = this.getFolding(lines, this.props.tabSize)
+    const visible = this.getVisible(
+      lines.length,
+      folding.byStart,
+      this.state.folded
+    )
+
+    return { lines, folding, visible }
+  }
+
+  private toggleFold(line: number) {
+    const layout = this.getLayout()
+
+    if (layout === null) {
+      return
+    }
+
+    this.setState(prevState => {
+      const folded = new Map(prevState.folded)
+
+      if (folded.has(line)) {
+        folded.delete(line)
+      } else {
+        folded.set(line, layout.lines[line])
+      }
+
+      return { folded }
+    })
+  }
+
+  private onFoldAll = () => {
+    const layout = this.getLayout()
+
+    if (layout !== null) {
+      this.setState({
+        folded: new Map(
+          layout.folding.ranges.map(range => [
+            range.start,
+            layout.lines[range.start],
+          ])
+        ),
+      })
+    }
+  }
+
+  private onUnfoldAll = () => this.setState({ folded: new Map() })
+
+  /** The line that "next change" and "previous change" go on from. */
+  private getReferenceLine(visible: ReadonlyArray<number>) {
     const jump = this.lastJump
 
     // Right after a jump, continue from the change that was jumped to
     if (jump !== null && Math.abs(this.scrollTop - jump.scrollTop) < 1) {
-      return jump.row
+      return jump.line
     }
 
     const visibleRows = this.viewportHeight / LineHeight
-    return Math.floor(this.scrollTop / LineHeight) + Math.floor(visibleRows / 3)
+    const row =
+      Math.floor(this.scrollTop / LineHeight) + Math.floor(visibleRows / 3)
+
+    return visible[Math.min(row, visible.length - 1)] ?? 0
   }
 
-  private goToChange(direction: 1 | -1) {
-    const lines = this.getLines()
+  /** Scroll so the line is a third of the way down, showing what is above. */
+  private scrollToLine(line: number) {
+    const layout = this.getLayout()
 
-    if (lines === null) {
+    if (layout === null) {
       return
     }
 
+    const row = getVisibleIndexOfLine(layout.visible, line)
+    const visibleRows = Math.floor(this.viewportHeight / LineHeight)
+    const scrollTop = Math.max(
+      0,
+      (row - Math.floor(visibleRows / 3)) * LineHeight
+    )
+
+    this.lastJump = { line, scrollTop }
+    this.gridRef.current?.scrollToPosition({ scrollLeft: 0, scrollTop })
+  }
+
+  private goToChange(direction: 1 | -1) {
+    const layout = this.getLayout()
+
+    if (layout === null) {
+      return
+    }
+
+    const { lines, folding, visible } = layout
     const starts = this.getChangeStarts(this.state.lineChanges, lines.length)
 
     if (starts.length === 0) {
       return
     }
 
-    const reference = this.getReferenceRow()
+    const reference = this.getReferenceLine(visible)
     const target =
       direction === 1
         ? starts.find(start => start > reference) ?? starts[0]
         : [...starts].reverse().find(start => start < reference) ??
           starts[starts.length - 1]
 
-    // Leave some lines above the change so it has some context
-    const visibleRows = Math.floor(this.viewportHeight / LineHeight)
-    const scrollTop = Math.max(
-      0,
-      (target - Math.floor(visibleRows / 3)) * LineHeight
+    // Open the blocks that hide the change before scrolling to it
+    const folded = unfoldBlocksHiding(
+      this.state.folded,
+      folding.byStart,
+      target
     )
 
-    this.lastJump = { row: target, scrollTop }
-    this.gridRef.current?.scrollToPosition({ scrollLeft: 0, scrollTop })
+    if (folded === this.state.folded) {
+      this.scrollToLine(target)
+    } else {
+      this.setState({ folded }, () => this.scrollToLine(target))
+    }
   }
 
   private onPreviousChange = () => this.goToChange(-1)
@@ -378,9 +502,9 @@ export class IdeFileViewer extends React.Component<
     }
 
     return (
-      <div className="ide-file-viewer-change-nav">
+      <div className="ide-file-viewer-header-buttons">
         <Button
-          className="ide-file-viewer-change-nav-button"
+          className="ide-file-viewer-header-button"
           onClick={this.onPreviousChange}
           tooltip="Previous change"
           ariaLabel="Go to the previous change"
@@ -388,12 +512,41 @@ export class IdeFileViewer extends React.Component<
           <Octicon symbol={octicons.arrowUp} />
         </Button>
         <Button
-          className="ide-file-viewer-change-nav-button"
+          className="ide-file-viewer-header-button"
           onClick={this.onNextChange}
           tooltip="Next change"
           ariaLabel="Go to the next change"
         >
           <Octicon symbol={octicons.arrowDown} />
+        </Button>
+      </div>
+    )
+  }
+
+  private renderFoldButtons() {
+    const layout = this.getLayout()
+
+    if (layout === null || layout.folding.ranges.length === 0) {
+      return null
+    }
+
+    return (
+      <div className="ide-file-viewer-header-buttons">
+        <Button
+          className="ide-file-viewer-header-button"
+          onClick={this.onFoldAll}
+          tooltip="Fold all blocks"
+          ariaLabel="Fold all blocks"
+        >
+          <Octicon symbol={octicons.fold} />
+        </Button>
+        <Button
+          className="ide-file-viewer-header-button"
+          onClick={this.onUnfoldAll}
+          tooltip="Unfold all blocks"
+          ariaLabel="Unfold all blocks"
+        >
+          <Octicon symbol={octicons.unfold} />
         </Button>
       </div>
     )
@@ -409,6 +562,7 @@ export class IdeFileViewer extends React.Component<
           <PathText path={path} />
         </span>
         {this.renderChangeNavigation()}
+        {this.renderFoldButtons()}
         {change !== undefined && (
           <Octicon
             symbol={iconForStatus(change.status)}
@@ -453,7 +607,9 @@ export class IdeFileViewer extends React.Component<
   private getGutterWidth(lineCount: number) {
     return (
       lineCount.toString().length * this.state.characterWidth +
-      GutterPadding * 2
+      GutterPadding +
+      FoldColumnWidth +
+      GutterPadding / 2
     )
   }
 
@@ -462,6 +618,13 @@ export class IdeFileViewer extends React.Component<
     width: number,
     height: number
   ) {
+    const layout = this.getLayout()
+
+    if (layout === null) {
+      return null
+    }
+
+    const { visible } = layout
     const { characterWidth } = this.state
     this.viewportHeight = height
     const gutterWidth = this.getGutterWidth(lines.length)
@@ -479,17 +642,18 @@ export class IdeFileViewer extends React.Component<
         height={height}
         columnCount={1}
         columnWidth={Math.max(width, contentWidth)}
-        rowCount={lines.length}
+        rowCount={visible.length}
         rowHeight={LineHeight}
         overscanRowCount={20}
         // The grid hides what overflows its inner container by default, which
         // keeps the line numbers from sticking to the left when scrolling.
         containerStyle={{ overflow: 'visible' }}
         cellRenderer={(cell: GridCellProps) =>
-          this.renderLine(cell, lines, gutterWidth)
+          this.renderLine(cell, layout, gutterWidth)
         }
         // Makes the grid render the lines again when they change
         lines={lines}
+        visible={visible}
         tokens={this.state.tokens}
         lineChanges={this.state.lineChanges}
         tabSize={this.props.tabSize}
@@ -500,35 +664,83 @@ export class IdeFileViewer extends React.Component<
     )
   }
 
+  /** Whether any of the lines of a folded block have changes. */
+  private hasChangesIn(range: IFoldRange) {
+    const { added, modified, removedBefore } = this.state.lineChanges
+
+    for (let line = range.start + 1; line <= range.end; line++) {
+      if (added.has(line) || modified.has(line) || removedBefore.has(line)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
   private renderLine(
     { key, rowIndex, style }: GridCellProps,
-    lines: ReadonlyArray<string>,
+    layout: NonNullable<ReturnType<IdeFileViewer['getLayout']>>,
     gutterWidth: number
   ) {
+    const { lines, folding, visible } = layout
+    const line = visible[rowIndex]
+    const range = folding.byStart.get(line)
+    const isFolded = range !== undefined && this.state.folded.has(line)
+
     const { added, modified, removedBefore } = this.state.lineChanges
-    const isLast = rowIndex === lines.length - 1
+    const isLast = line === lines.length - 1
     const indentation = this.getIndentation(lines, this.props.tabSize)
 
+    // A folded block with changes in it shows them on the line it starts on
+    const hasHiddenChanges =
+      isFolded && range !== undefined && this.hasChangesIn(range)
+
     const numberClassName = classNames('ide-line-number', {
-      'change-added': added.has(rowIndex),
-      'change-modified': modified.has(rowIndex),
-      'change-removed-before': removedBefore.has(rowIndex),
+      'change-added': added.has(line),
+      'change-modified': modified.has(line) || hasHiddenChanges,
+      'change-removed-before': removedBefore.has(line),
       'change-removed-after': isLast && removedBefore.has(lines.length),
     })
 
     return (
       <div key={key} style={style} className="ide-line">
         <span className={numberClassName} style={{ width: gutterWidth }}>
-          {rowIndex + 1}
+          <span className="ide-line-number-text">{line + 1}</span>
+          <span className="ide-line-fold-column">
+            {range !== undefined && (
+              <span
+                className={classNames('ide-line-fold', { folded: isFolded })}
+                role="button"
+                aria-label={isFolded ? 'Unfold block' : 'Fold block'}
+                aria-expanded={!isFolded}
+                onClick={() => this.toggleFold(line)}
+              >
+                <Octicon
+                  symbol={
+                    isFolded ? octicons.chevronRight : octicons.chevronDown
+                  }
+                />
+              </span>
+            )}
+          </span>
         </span>
         <span
           className="ide-line-text"
           style={this.getIndentGuidesStyle(
-            indentation.columns[rowIndex],
+            indentation.columns[line],
             indentation.unit
           )}
         >
-          {this.renderLineText(lines[rowIndex], this.state.tokens?.[rowIndex])}
+          {this.renderLineText(lines[line], this.state.tokens?.[line])}
+          {isFolded && range !== undefined && (
+            <span
+              className="ide-fold-ellipsis"
+              title={`${range.end - range.start} lines are folded`}
+              onClick={() => this.toggleFold(line)}
+            >
+              …
+            </span>
+          )}
         </span>
       </div>
     )
