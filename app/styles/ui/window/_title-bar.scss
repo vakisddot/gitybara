@@ -20,10 +20,16 @@
     background: var(--win32-title-bar-background-color);
     border-bottom: 1px solid #000;
 
+    // The mark is only a shape, which is filled with the color of the theme
     .app-icon {
-      color: var(--toolbar-button-secondary-color);
+      width: 18px;
+      height: 18px;
       margin: 0 var(--spacing);
       align-self: center;
+      background-color: var(--toolbar-button-secondary-color);
+      -webkit-mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      -webkit-mask-size: contain;
     }
   }
 
