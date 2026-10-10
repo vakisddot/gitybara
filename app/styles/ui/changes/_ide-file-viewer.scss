@@ -1,0 +1,71 @@
+// The read-only file viewer shown next to the IDE view of the changes list
+.ide-file-viewer {
+  background: var(--background-color);
+
+  .header .ide-file-viewer-path {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .ide-file-viewer-message {
+    padding: var(--spacing-double);
+    color: var(--text-secondary-color);
+  }
+
+  .ide-file-viewer-banner {
+    flex-shrink: 0;
+    padding: var(--spacing-half) var(--spacing);
+    color: var(--text-color);
+    background: var(--file-warning-background-color);
+    border-bottom: 1px solid var(--file-warning-border-color);
+  }
+
+  .ide-file-viewer-lines {
+    flex: 1;
+    min-height: 0;
+
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-sm);
+    color: var(--diff-text-color);
+
+    .ReactVirtualized__Grid:focus {
+      outline: none;
+    }
+  }
+
+  .ide-line {
+    // Keep the width set by the grid, the line is as wide as the longest one
+    // and the line number sticks to the left while scrolling sideways.
+    display: flex;
+    line-height: 20px;
+    white-space: pre;
+  }
+
+  .ide-line-number {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    padding-right: 12px;
+    text-align: right;
+    user-select: none;
+    color: var(--diff-line-number-color);
+    background: var(--diff-gutter-background-color);
+    border-right: 1px solid var(--diff-border-color);
+  }
+
+  .ide-line-text {
+    padding-left: 12px;
+    user-select: text;
+  }
+
+  // Not shown, only used to measure how wide a character is
+  .ide-file-viewer-measure {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-sm);
+  }
+}

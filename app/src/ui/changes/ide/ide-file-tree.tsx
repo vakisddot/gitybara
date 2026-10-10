@@ -48,6 +48,10 @@ interface IIdeFileTreeProps {
    * repository were added, modified, deleted and so on.
    */
   readonly changedFiles: ReadonlyArray<WorkingDirectoryFileChange>
+
+  /** The selected file, relative to the repository root */
+  readonly selectedPath: string | null
+  readonly onSelectedPathChanged: (path: string) => void
   readonly rowHeight: number
   readonly availableWidth: number
 }
@@ -57,7 +61,6 @@ interface IIdeFileTreeState {
   readonly repositoryPaths: ReadonlyArray<string> | null
   readonly loadFailed: boolean
   readonly expandedDirectoryIds: ReadonlySet<string>
-  readonly selectedPath: string | null
 }
 
 /**
@@ -79,7 +82,6 @@ export class IdeFileTree extends React.Component<
       repositoryPaths: null,
       loadFailed: false,
       expandedDirectoryIds: new Set<string>(),
-      selectedPath: null,
     }
   }
 
@@ -258,7 +260,7 @@ export class IdeFileTree extends React.Component<
         : undefined
 
     if (row?.kind === 'file') {
-      this.setState({ selectedPath: row.item.path })
+      this.props.onSelectedPathChanged(row.item.path)
     }
   }
 
@@ -418,7 +420,7 @@ export class IdeFileTree extends React.Component<
   }
 
   public render() {
-    const { repositoryPaths, loadFailed, selectedPath } = this.state
+    const { repositoryPaths, loadFailed } = this.state
 
     if (repositoryPaths === null) {
       return <div className="ide-file-tree-message">Loading files…</div>
@@ -445,7 +447,10 @@ export class IdeFileTree extends React.Component<
           rowCount={[visibleRows.length]}
           rowRenderer={this.renderRow}
           rowHeight={this.props.rowHeight}
-          selectedRows={this.getSelectedRows(visibleRows, selectedPath)}
+          selectedRows={this.getSelectedRows(
+            visibleRows,
+            this.props.selectedPath
+          )}
           selectionMode="single"
           canSelectRow={this.canSelectRow}
           rowCustomClassNameMap={this.getDirectoryRowClassNameMap(visibleRows)}

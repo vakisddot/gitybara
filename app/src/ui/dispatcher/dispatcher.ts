@@ -4287,6 +4287,11 @@ export class Dispatcher {
     this.appStore._setChangesListViewMode(mode)
   }
 
+  /** Select the file shown in the IDE view of the changes list. */
+  public setIdeSelectedFilePath(repository: Repository, path: string | null) {
+    this.appStore._setIdeSelectedFilePath(repository, path)
+  }
+
   /** Set the selected Copilot model for a specific feature. */
   public setSelectedCopilotModel(
     account: Account,

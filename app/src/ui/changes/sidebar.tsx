@@ -496,6 +496,7 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
           fileListFilter={this.props.changes.fileListFilter}
           showChangesFilter={this.props.showChangesFilter}
           changesListViewMode={this.props.changesListViewMode}
+          ideSelectedFilePath={this.props.changes.ideSelectedFilePath}
           skipCommitHooks={this.props.skipCommitHooks}
           signOffCommits={this.props.signOffCommits}
           allowEmptyCommit={this.props.allowEmptyCommit}

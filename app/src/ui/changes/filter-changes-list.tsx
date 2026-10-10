@@ -238,6 +238,9 @@ interface IFilterChangesListProps {
   /** How changed files are displayed in the Changes tab */
   readonly changesListViewMode: ChangesListViewMode
 
+  /** The file selected in the IDE view */
+  readonly ideSelectedFilePath: string | null
+
   /**
    * Whether or not to skip blocking commit hooks when creating commits
    * by means of passing the `--no-verify` flag to git commit
@@ -1475,6 +1478,10 @@ export class FilterChangesList extends React.Component<
     this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Tree)
   }
 
+  private onIdeSelectedPathChanged = (path: string) => {
+    this.props.dispatcher.setIdeSelectedFilePath(this.props.repository, path)
+  }
+
   private onIdeViewButtonClick = () => {
     this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Ide)
   }
@@ -1678,6 +1685,8 @@ export class FilterChangesList extends React.Component<
           key={this.props.repository.id}
           repository={this.props.repository}
           changedFiles={this.props.workingDirectory.files}
+          selectedPath={this.props.ideSelectedFilePath}
+          onSelectedPathChanged={this.onIdeSelectedPathChanged}
           rowHeight={TreeRowHeight}
           availableWidth={this.props.availableWidth}
         />

@@ -30,6 +30,7 @@ export function createState<K extends keyof IChangesState>(
       isDeletedFile: false,
       isExcludedFromCommit: false,
     },
+    ideSelectedFilePath: null,
   }
 
   return merge(baseChangesState, pick)

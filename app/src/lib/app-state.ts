@@ -875,6 +875,13 @@ export interface IChangesState {
 
   /** The file list filter state containing all filter options */
   readonly fileListFilter: IFileListFilterState
+
+  /**
+   * The path, relative to the repository root, of the file selected in the IDE
+   * view of the changes list, or null if no file is selected. Unlike the
+   * selection, it can be any file in the repository, not only a changed one.
+   */
+  readonly ideSelectedFilePath: string | null
 }
 
 /**

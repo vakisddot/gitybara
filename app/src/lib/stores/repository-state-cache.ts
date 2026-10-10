@@ -392,6 +392,7 @@ function getInitialRepositoryState(): IRepositoryState {
         isDeletedFile: false,
         isExcludedFromCommit: false,
       },
+      ideSelectedFilePath: null,
     },
     selectedSection: RepositorySectionTab.Changes,
     branchesState: {

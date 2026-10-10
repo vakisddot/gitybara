@@ -5,6 +5,7 @@ import { TipState } from '../models/tip'
 import { UiView } from './ui-view'
 import { Changes, ChangesSidebar } from './changes'
 import { NoChanges } from './changes/no-changes'
+import { IdeFileViewer } from './changes/ide/ide-file-viewer'
 import { MultipleSelection } from './changes/multiple-selection'
 import { FilesChangedBadge } from './changes/files-changed-badge'
 import { SelectedCommits, CompareSidebar } from './history'
@@ -120,6 +121,9 @@ interface IRepositoryViewProps {
 
   /** How changed files are displayed in the Changes tab */
   readonly changesListViewMode: ChangesListViewMode
+
+  /** The width of a tab character, in characters */
+  readonly selectedTabSize: number
 
   /**
    * Whether or not to skip blocking commit hooks when creating commits
@@ -560,6 +564,17 @@ export class RepositoryView extends React.Component<
   private renderContentForChanges(): JSX.Element | null {
     const { changesState } = this.props.state
     const { workingDirectory, selection } = changesState
+
+    if (this.props.changesListViewMode === ChangesListViewMode.Ide) {
+      return (
+        <IdeFileViewer
+          repository={this.props.repository}
+          path={changesState.ideSelectedFilePath}
+          changedFiles={workingDirectory.files}
+          tabSize={this.props.selectedTabSize}
+        />
+      )
+    }
 
     if (selection.kind === ChangesSelectionKind.Stash) {
       return this.renderStashedChangesContent()

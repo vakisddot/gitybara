@@ -10740,6 +10740,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.emitUpdate()
   }
 
+  public _setIdeSelectedFilePath(repository: Repository, path: string | null) {
+    this.repositoryStateCache.updateChangesState(repository, () => ({
+      ideSelectedFilePath: path,
+    }))
+    this.emitUpdate()
+  }
+
   public _setChangesListFilterText(repository: Repository, filterText: string) {
     this._updateFileListFilter(repository, { filterText })
   }

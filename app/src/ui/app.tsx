@@ -4013,6 +4013,7 @@ export class App extends React.Component<IAppProps, IAppState> {
           pullRequestSuggestedNextAction={state.pullRequestSuggestedNextAction}
           showChangesFilter={state.showChangesFilter}
           changesListViewMode={state.changesListViewMode}
+          selectedTabSize={state.selectedTabSize}
           shouldShowGenerateCommitMessageCallOut={
             !this.state.commitMessageGenerationButtonClicked
           }
