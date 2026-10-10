@@ -80,6 +80,7 @@ import { ChangesListFilterOptions } from './changes-list-filter-options'
 import { HookProgress } from '../../lib/git'
 import { formatNumber } from '../../lib/format-number'
 import { TreeChangesList } from './tree/tree-changes-list'
+import { IdeFileTree } from './ide/ide-file-tree'
 import { isPathInDirectory } from './tree/tree-changes-rows'
 import {
   collapseTreeDirectoryRecursively,
@@ -1474,7 +1475,18 @@ export class FilterChangesList extends React.Component<
     this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Tree)
   }
 
+  private onIdeViewButtonClick = () => {
+    this.props.dispatcher.setChangesListViewMode(ChangesListViewMode.Ide)
+  }
+
   private onFlatListViewButtonContextMenu = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  private onIdeViewButtonContextMenu = (
     event: React.MouseEvent<HTMLButtonElement>
   ) => {
     event.preventDefault()
@@ -1531,6 +1543,16 @@ export class FilterChangesList extends React.Component<
           tooltip="Tree view"
         >
           <Octicon symbol={octicons.fileDirectory} />
+        </Button>
+        <Button
+          className="changes-list-view-toggle-button"
+          onClick={this.onIdeViewButtonClick}
+          onContextMenu={this.onIdeViewButtonContextMenu}
+          ariaPressed={mode === ChangesListViewMode.Ide}
+          ariaLabel="Show all files in the repository"
+          tooltip="IDE view (all files)"
+        >
+          <Octicon symbol={octicons.fileCode} />
         </Button>
       </div>
     )
@@ -1640,7 +1662,34 @@ export class FilterChangesList extends React.Component<
     )
   }
 
+  /**
+   * The IDE view is for browsing, not for building a commit, so it only has
+   * the view mode toggle: no filter, no select-all checkbox and no commit form.
+   */
+  private renderIdeView() {
+    return (
+      <div className="changes-list-container file-list filtered-changes-list">
+        <div className="header filter-field-row">
+          <div className="filter-box-container changes-list-view-only">
+            {this.renderViewModeToggle()}
+          </div>
+        </div>
+        <IdeFileTree
+          key={this.props.repository.id}
+          repository={this.props.repository}
+          changedFiles={this.props.workingDirectory.files}
+          rowHeight={TreeRowHeight}
+          availableWidth={this.props.availableWidth}
+        />
+      </div>
+    )
+  }
+
   public render() {
+    if (this.props.changesListViewMode === ChangesListViewMode.Ide) {
+      return this.renderIdeView()
+    }
+
     return (
       <>
         <div className="changes-list-container file-list filtered-changes-list">

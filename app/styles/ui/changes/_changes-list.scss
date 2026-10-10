@@ -228,6 +228,11 @@
     min-height: 0;
   }
 
+  .ide-file-tree-message {
+    padding: var(--spacing);
+    color: var(--text-secondary-color);
+  }
+
   .changes-tree-list {
     flex: 1;
 
@@ -293,6 +298,11 @@
         color: var(--text-secondary-color);
         font-size: var(--font-size-sm);
       }
+    }
+
+    .ide-file {
+      // The row is already a list item, the padding comes from the depth
+      padding-right: var(--spacing);
     }
 
     .changes-tree-file-row {

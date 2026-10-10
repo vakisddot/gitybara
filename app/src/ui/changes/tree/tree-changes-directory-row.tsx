@@ -103,7 +103,9 @@ export function TreeChangesDirectoryRow(props: ITreeChangesDirectoryRowProps) {
           availableWidth={availableNameWidth}
         />
       </span>
-      <span className="changes-tree-directory-count">{row.fileCount}</span>
+      {row.fileCount > 0 && (
+        <span className="changes-tree-directory-count">{row.fileCount}</span>
+      )}
     </button>
   )
 }
