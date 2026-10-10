@@ -1,13 +1,21 @@
 import * as React from 'react'
+import * as Path from 'path'
 import { AutoSizer, Grid, GridCellProps } from 'react-virtualized'
 
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
 import { mapStatus } from '../../../lib/status'
+import { highlight } from '../../../lib/highlighter/worker'
+import { ITokens } from '../../../lib/highlighter/types'
 import { formatBytes } from '../../lib/bytes'
+import { syntaxHighlightLine } from '../../diff/diff-helpers'
 import { PathText } from '../../lib/path-text'
 import { Octicon, iconForStatus } from '../../octicons'
-import { IdeFileContents, readIdeFileContents } from './ide-file-contents'
+import {
+  IdeFileContents,
+  isHighlightable,
+  readIdeFileContents,
+} from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
 
@@ -44,6 +52,12 @@ interface IIdeFileViewerState {
   readonly contents: IdeFileContents | null
   readonly failed: boolean
 
+  /**
+   * The syntax highlighting of the lines, by line index. It's null until the
+   * highlighter is done, and for files that aren't highlighted.
+   */
+  readonly tokens: ITokens | null
+
   /** The width in pixels of a character in the monospace font. */
   readonly characterWidth: number
 }
@@ -55,13 +69,19 @@ export class IdeFileViewer extends React.Component<
 > {
   private unmounted = false
   private loadRequestId = 0
+  private highlightRequestId = 0
   private reloadTimeoutId: number | null = null
   private measureRef = React.createRef<HTMLSpanElement>()
 
   public constructor(props: IIdeFileViewerProps) {
     super(props)
 
-    this.state = { contents: null, failed: false, characterWidth: 7 }
+    this.state = {
+      contents: null,
+      failed: false,
+      tokens: null,
+      characterWidth: 7,
+    }
   }
 
   public componentDidMount() {
@@ -72,7 +92,8 @@ export class IdeFileViewer extends React.Component<
   public componentDidUpdate(prevProps: IIdeFileViewerProps) {
     if (prevProps.path !== this.props.path) {
       // Don't keep showing the previous file while the new one is read
-      this.setState({ contents: null, failed: false })
+      this.highlightRequestId++
+      this.setState({ contents: null, failed: false, tokens: null })
       this.loadContents()
     } else if (prevProps.changedFiles !== this.props.changedFiles) {
       this.scheduleReload()
@@ -124,17 +145,51 @@ export class IdeFileViewer extends React.Component<
         return
       }
 
-      this.setState(prevState =>
-        isSameContents(prevState.contents, contents)
-          ? null
-          : { contents, failed: false }
-      )
+      if (isSameContents(this.state.contents, contents)) {
+        return
+      }
+
+      this.setState({ contents, failed: false, tokens: null })
+      this.highlightContents(contents)
     } catch (e) {
       log.error(`Failed to read ${path} to show it`, e)
 
       if (!this.unmounted && requestId === this.loadRequestId) {
         this.setState({ contents: null, failed: true })
       }
+    }
+  }
+
+  private async highlightContents(contents: IdeFileContents) {
+    const { path, tabSize } = this.props
+
+    if (
+      path === null ||
+      contents.kind !== 'text' ||
+      !isHighlightable(contents.lines)
+    ) {
+      return
+    }
+
+    const requestId = ++this.highlightRequestId
+    const allLines = contents.lines.map((_, index) => index)
+
+    try {
+      const tokens = await highlight(
+        contents.lines,
+        Path.basename(path),
+        Path.extname(path),
+        tabSize,
+        allLines
+      )
+
+      // Ignore the result if the file changed or was replaced while it ran
+      if (!this.unmounted && requestId === this.highlightRequestId) {
+        this.setState({ tokens })
+      }
+    } catch (e) {
+      // The file is still shown, only without the colors
+      log.error(`Failed to highlight ${path}`, e)
     }
   }
 
@@ -184,7 +239,7 @@ export class IdeFileViewer extends React.Component<
             This file was deleted. Showing the last committed version.
           </div>
         )}
-        <div className="ide-file-viewer-lines">
+        <div className="ide-file-viewer-lines cm-s-default">
           <AutoSizer>
             {({ width, height }) => this.renderGrid(lines, width, height)}
           </AutoSizer>
@@ -230,6 +285,7 @@ export class IdeFileViewer extends React.Component<
         }
         // Makes the grid render the lines again when they change
         lines={lines}
+        tokens={this.state.tokens}
         tabSize={this.props.tabSize}
         characterWidth={characterWidth}
         aria-label="File contents"
@@ -248,9 +304,15 @@ export class IdeFileViewer extends React.Component<
         <span className="ide-line-number" style={{ width: gutterWidth }}>
           {rowIndex + 1}
         </span>
-        <span className="ide-line-text">{lines[rowIndex]}</span>
+        <span className="ide-line-text">
+          {this.renderLineText(lines[rowIndex], this.state.tokens?.[rowIndex])}
+        </span>
       </div>
     )
+  }
+
+  private renderLineText(line: string, tokens: ITokens[number] | undefined) {
+    return tokens === undefined ? line : syntaxHighlightLine(line, [tokens])
   }
 
   private renderBody(): JSX.Element | null {

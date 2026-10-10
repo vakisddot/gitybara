@@ -7,6 +7,9 @@ import { getBlobContents } from '../../../lib/git/show'
 /** Files larger than this are not shown, to keep the viewer responsive. */
 export const MaxViewableFileSize = 5 * 1024 * 1024
 
+/** Files with more characters than this are shown without syntax colors. */
+export const MaxHighlightedFileLength = 1024 * 1024
+
 /** How many bytes at the start of a file are checked for binary data. */
 const BinarySniffLength = 8000
 
@@ -50,6 +53,21 @@ export function splitIntoLines(text: string): ReadonlyArray<string> {
   }
 
   return lines
+}
+
+/** Whether the lines are short enough to be worth syntax highlighting. */
+export function isHighlightable(lines: ReadonlyArray<string>): boolean {
+  let length = 0
+
+  for (const line of lines) {
+    length += line.length + 1
+
+    if (length > MaxHighlightedFileLength) {
+      return false
+    }
+  }
+
+  return true
 }
 
 export function decodeFileContents(

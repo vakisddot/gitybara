@@ -7,6 +7,8 @@ import { exec } from 'dugite'
 import {
   decodeFileContents,
   isBinaryBuffer,
+  isHighlightable,
+  MaxHighlightedFileLength,
   MaxViewableFileSize,
   readIdeFileContents,
   splitIntoLines,
@@ -123,6 +125,24 @@ describe('ide-file-contents', () => {
       const result = await readIdeFileContents(repo, 'dir')
 
       assert.deepStrictEqual(result, { kind: 'not-a-file' })
+    })
+  })
+
+  describe('isHighlightable', () => {
+    it('accepts ordinary files', () => {
+      assert.strictEqual(isHighlightable(['const a = 1', 'a++']), true)
+      assert.strictEqual(isHighlightable([]), true)
+    })
+
+    it('rejects files longer than the limit, counting line endings', () => {
+      assert.strictEqual(
+        isHighlightable(['a'.repeat(MaxHighlightedFileLength - 1)]),
+        true
+      )
+      assert.strictEqual(
+        isHighlightable(['a'.repeat(MaxHighlightedFileLength)]),
+        false
+      )
     })
   })
 
