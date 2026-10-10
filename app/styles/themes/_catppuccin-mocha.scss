@@ -1,0 +1,291 @@
+// Catppuccin Mocha
+//
+// A color variant that is applied on top of the dark theme (the body has both
+// the `theme-dark` and `theme-catppuccin-mocha` classes), so only the colors
+// that differ from the dark theme need to be overridden here. Because most of
+// the dark theme's colors are shades of gray/blue, this overrides all of them.
+//
+// Palette: https://github.com/catppuccin/catppuccin#-palette
+// Keep this in the same order as _dark.scss so the two are easy to compare.
+
+$ctp-rosewater: #f5e0dc;
+$ctp-flamingo: #f2cdcd;
+$ctp-pink: #f5c2e7;
+$ctp-mauve: #cba6f7;
+$ctp-red: #f38ba8;
+$ctp-maroon: #eba0ac;
+$ctp-peach: #fab387;
+$ctp-yellow: #f9e2af;
+$ctp-green: #a6e3a1;
+$ctp-teal: #94e2d5;
+$ctp-sky: #89dceb;
+$ctp-sapphire: #74c7ec;
+$ctp-blue: #89b4fa;
+$ctp-lavender: #b4befe;
+$ctp-text: #cdd6f4;
+$ctp-subtext1: #bac2de;
+$ctp-subtext0: #a6adc8;
+$ctp-overlay2: #9399b2;
+$ctp-overlay1: #7f849c;
+$ctp-overlay0: #6c7086;
+$ctp-surface2: #585b70;
+$ctp-surface1: #45475a;
+$ctp-surface0: #313244;
+$ctp-base: #1e1e2e;
+$ctp-mantle: #181825;
+$ctp-crust: #11111b;
+
+// Used for the backgrounds of rows that are tinted by a color (selection,
+// diff lines, banners). Mixing with the base color instead of using alpha
+// keeps them opaque, like the colors in the dark theme.
+@function ctp-tint($color, $amount) {
+  @return mix($color, $ctp-base, $amount);
+}
+
+// Mixing a color into the dark base only gives desaturated grays (green turns
+// into gray-teal), so the diff colors keep the hue of the palette color and set
+// their own saturation and lightness instead.
+@function ctp-hsl($color, $saturation, $lightness) {
+  @return change-color($color, $saturation: $saturation, $lightness: $lightness);
+}
+
+body.theme-catppuccin-mocha {
+  --color-new: #{$ctp-green};
+  --color-deleted: #{$ctp-red};
+  --color-modified: #{$ctp-yellow};
+  --color-renamed: #{$ctp-blue};
+  --color-conflicted: #{$ctp-peach};
+
+  --text-color: #{$ctp-text};
+  --text-secondary-color: #{$ctp-subtext0};
+  --text-secondary-color-muted: #{$ctp-overlay1};
+  --background-color: #{$ctp-base};
+
+  --win32-title-bar-background-color: #{$ctp-mantle};
+
+  --button-background: #{$ctp-mauve};
+  --button-hover-background: #{lighten($ctp-mauve, 5%)};
+  --button-text-color: #{$ctp-crust};
+  --button-focus-border-color: #{$ctp-lavender};
+
+  --link-button-color: #{$ctp-blue};
+  --link-button-hover-color: #{lighten($ctp-blue, 3%)};
+  --link-button-selected-hover-color: #{$ctp-blue};
+
+  --secondary-button-background: #{$ctp-surface0};
+  --secondary-button-border-color: var(--box-border-contrast-color);
+  --secondary-button-hover-border-color: #{$ctp-overlay2};
+  --secondary-button-hover-background: var(--secondary-button-background);
+  --secondary-button-text-color: var(--text-color);
+  --secondary-button-focus-shadow-color: #{rgba($ctp-lavender, 0.75)};
+  --secondary-button-focus-border-color: #{$ctp-lavender};
+
+  --badge-icon-color: #{$ctp-subtext0};
+
+  --input-icon-warning-color: #{$ctp-yellow};
+  --input-icon-error-color: #{$ctp-red};
+  --input-icon-hover-background-color: #{$ctp-surface0};
+
+  --scroll-bar-thumb-background-color: #{rgba($ctp-text, 0.2)};
+  --scroll-bar-thumb-background-color-active: #{rgba($ctp-text, 0.5)};
+
+  // Box
+  --box-background-color: #{$ctp-mantle};
+  --box-alt-background-color: #{lighten($ctp-base, 3%)};
+  --box-skeleton-background-color: #{$ctp-surface1};
+  --skeleton-background-gradient: -webkit-linear-gradient(left, #{rgba($ctp-surface0, 0)} 0%, #{rgba($ctp-surface0, 0.5)} 50%, #{rgba($ctp-surface0, 0)} 100%);
+  --box-border-color: #{$ctp-crust};
+
+  --changes-tree-guide-color: #{rgba($ctp-text, 0.1)};
+
+  --box-border-contrast-color: #{$ctp-overlay0};
+  --box-border-accent-color: #{$ctp-mauve};
+
+  --box-selected-background-color: #{$ctp-surface1};
+  --box-hover-background-color: #{$ctp-surface0};
+  --box-selected-border-color: #{$ctp-overlay1};
+  --box-selected-active-background-color: #{ctp-tint($ctp-mauve, 35%)};
+  --box-selected-active-text-color: #{$ctp-text};
+  --box-selected-active-border-color: #{$ctp-mauve};
+
+  --box-overflow-shadow-background: #{linear-gradient(180deg, rgba($ctp-base, 0) 0%, rgba($ctp-base, 1) 90%, rgba($ctp-base, 1) 100%)};
+  --no-shadow-top: #{linear-gradient($ctp-base, rgba($ctp-base, 0))};
+  --no-shadow-bottom: #{linear-gradient(rgba($ctp-base, 0), $ctp-base)};
+  --top-shadow: #{linear-gradient(0deg, rgba($ctp-base, 0) 0%, rgba($ctp-crust, 0.6) 90%, rgba($ctp-crust, 1) 100%)};
+  --bottom-shadow: #{linear-gradient(180deg, rgba($ctp-base, 0) 0%, rgba($ctp-crust, 0.6) 90%, rgba($ctp-crust, 1) 100%) 0 100%};
+
+  --box-placeholder-color: #{$ctp-overlay1};
+
+  --co-author-tag-background-color: #{ctp-tint($ctp-blue, 25%)};
+  --co-author-tag-border-color: #{ctp-tint($ctp-blue, 50%)};
+
+  --commit-warning-badge-background-color: #{$ctp-base};
+  --commit-warning-badge-border-color: #{$ctp-surface1};
+
+  --shadow-color: #{rgba($ctp-crust, 0.6)};
+
+  --toolbar-background-color: #{$ctp-mantle};
+
+  --toolbar-button-hover-color: #{$ctp-text};
+  --toolbar-button-hover-background-color: #{$ctp-surface0};
+  --toolbar-button-focus-background-color: #{$ctp-surface0};
+
+  --toolbar-button-progress-color: #{$ctp-surface0};
+  --toolbar-button-focus-progress-color: #{$ctp-surface1};
+  --toolbar-button-hover-progress-color: #{$ctp-surface1};
+  --toolbar-dropdown-open-progress-color: #{$ctp-surface2};
+  --toolbar-dropdown-text-warning-color: #{$ctp-peach};
+  --toolbar-dropdown-text-hover-color: #{$ctp-text};
+
+  --toolbar-tooltip-background-color: #{$ctp-surface0};
+  --toolbar-tooltip-shadow-color: #{$ctp-crust};
+
+  // App menu bar colors (Windows/Linux only)
+  --app-menu-button-active-background-color: #{$ctp-surface0};
+  --app-menu-pane-background-color: #{$ctp-surface0};
+  --app-menu-divider-color: #{$ctp-surface2};
+
+  --toolbar-badge-background-color: #{$ctp-surface1};
+  --toolbar-badge-active-background-color: #{$ctp-surface1};
+
+  --tab-bar-active-color: #{$ctp-mauve};
+  --tab-bar-hover-background-color: #{$ctp-surface0};
+  --tab-bar-count-background-color: #{$ctp-surface1};
+
+  --list-item-badge-background-color: #{$ctp-surface2};
+  --list-item-selected-badge-color: #{$ctp-text};
+  --list-item-selected-badge-background-color: #{$ctp-overlay0};
+  --list-item-selected-active-badge-color: #{$ctp-base};
+  --list-item-selected-active-badge-background-color: #{$ctp-text};
+  --list-item-hover-background-color: #{$ctp-surface0};
+
+  --toast-notification-background-color: #{rgba($ctp-crust, 0.85)};
+
+  --focus-color: #{$ctp-mauve};
+  --accent-color: #{$ctp-lavender};
+  --diff-linenumber-focus-color: #{$ctp-lavender};
+
+  --text-field-focus-shadow-color: #{rgba($ctp-mauve, 0.25)};
+
+  --primary-suggested-action-background: #{ctp-tint($ctp-mauve, 20%)};
+  --primary-suggested-action-border-color: #{ctp-tint($ctp-mauve, 50%)};
+  --suggested-action-icon-color: #{$ctp-mauve};
+
+  // Diff view
+  --diff-text-color: var(--text-color);
+  --diff-alt-text-color: #{$ctp-subtext0};
+  --diff-border-color: #{$ctp-surface0};
+  --diff-gutter-color: #{$ctp-surface0};
+  --diff-gutter-background-color: #{$ctp-mantle};
+
+  --diff-selected-background-color: #{ctp-hsl($ctp-lavender, 40%, 28%)};
+  --diff-selected-border-color: #{ctp-hsl($ctp-lavender, 40%, 38%)};
+  --diff-selected-gutter-color: #{ctp-hsl($ctp-lavender, 40%, 38%)};
+
+  --diff-add-background-color: #{ctp-hsl($ctp-green, 25%, 19%)};
+  --diff-add-border-color: #{ctp-hsl($ctp-green, 28%, 25%)};
+  --diff-add-gutter-color: #{ctp-hsl($ctp-green, 28%, 25%)};
+  --diff-add-gutter-background-color: #{ctp-hsl($ctp-green, 30%, 24%)};
+  --diff-add-inner-background-color: #{ctp-hsl($ctp-green, 35%, 33%)};
+
+  --diff-delete-background-color: #{ctp-hsl($ctp-red, 30%, 20%)};
+  --diff-delete-border-color: #{ctp-hsl($ctp-red, 32%, 27%)};
+  --diff-delete-gutter-color: #{ctp-hsl($ctp-red, 32%, 27%)};
+  --diff-delete-gutter-background-color: #{ctp-hsl($ctp-red, 34%, 26%)};
+  --diff-delete-inner-background-color: #{ctp-hsl($ctp-red, 40%, 36%)};
+  --diff-delete-text-color: var(--diff-text-color);
+
+  --diff-hunk-background-color: #{$ctp-mantle};
+  --diff-hunk-border-color: #{$ctp-surface0};
+  --diff-hunk-gutter-color: #{$ctp-surface0};
+  --diff-hunk-gutter-background-color: #{$ctp-crust};
+
+  --diff-hover-background-color: #{ctp-hsl($ctp-lavender, 40%, 36%)};
+  --diff-hover-border-color: #{$ctp-lavender};
+  --diff-hover-gutter-color: #{$ctp-lavender};
+
+  --diff-add-hover-background-color: #{ctp-hsl($ctp-green, 32%, 28%)};
+  --diff-add-hover-border-color: #{ctp-hsl($ctp-green, 35%, 38%)};
+  --diff-add-hover-gutter-color: #{ctp-hsl($ctp-green, 35%, 38%)};
+
+  --diff-delete-hover-background-color: #{ctp-hsl($ctp-red, 36%, 30%)};
+  --diff-delete-hover-border-color: #{ctp-hsl($ctp-red, 40%, 40%)};
+  --diff-delete-hover-gutter-color: #{ctp-hsl($ctp-red, 40%, 40%)};
+
+  --diff-empty-row-background-color: #{$ctp-mantle};
+  --diff-empty-hunk-handle: #{$ctp-surface1};
+
+  // Syntax highlighting text colors, following Catppuccin's VS Code theme
+  --syntax-variable-color: #{$ctp-text};
+  --syntax-alt-variable-color: #{$ctp-blue};
+  --syntax-keyword-color: #{$ctp-mauve};
+  --syntax-atom-color: #{$ctp-peach};
+  --syntax-string-color: #{$ctp-green};
+  --syntax-qualifier-color: #{$ctp-yellow};
+  --syntax-type-color: #{$ctp-yellow};
+  --syntax-comment-color: #{$ctp-overlay2};
+  --syntax-tag-color: #{$ctp-blue};
+  --syntax-attribute-color: #{$ctp-yellow};
+  --syntax-link-color: #{$ctp-blue};
+  --syntax-header-color: #{$ctp-red};
+  --syntax-quote-color: #{$ctp-pink};
+
+  // Colors for form errors
+  --error-color: #{$ctp-red};
+  --form-error-background: #{ctp-tint($ctp-red, 15%)};
+  --form-error-border-color: #{ctp-tint($ctp-red, 40%)};
+
+  --dialog-banner-success-background: #{ctp-tint($ctp-green, 20%)};
+  --dialog-banner-success-border-color: #{ctp-tint($ctp-green, 45%)};
+
+  --input-error-text-color: #{$ctp-red};
+
+  --overlay-background-color: #{rgba($ctp-crust, 0.6)};
+
+  --dialog-warning-color: #{$ctp-yellow};
+  --dialog-information-color: #{$ctp-blue};
+  --dialog-error-color: #{$ctp-red};
+
+  --banner-warning-background: #{ctp-tint($ctp-yellow, 10%)};
+  --banner-warning-link-color: #{$ctp-blue};
+  --banner-warning-icon-color: #{$ctp-yellow};
+
+  --file-warning-background-color: #{rgba($ctp-yellow, 0.15)};
+  --file-warning-color: #{$ctp-yellow};
+  --file-warning-border-color: #{rgba($ctp-yellow, 0.3)};
+
+  --tooltip-background-color: #{$ctp-surface0};
+  --tooltip-color: #{$ctp-text};
+  --tooltip-shadow-color: #{$ctp-crust};
+
+  --path-segment-background: #{$ctp-surface1};
+  --path-segment-background-focus: #{lighten($ctp-surface1, 5%)};
+
+  --status-pending-color: #{$ctp-yellow};
+  --status-error-color: #{$ctp-red};
+  --status-success-color: #{$ctp-green};
+
+  --pr-open-icon-color: #{$ctp-green};
+  --pr-draft-icon-color: #{$ctp-overlay1};
+
+  --pr-timeline-line-color: #{$ctp-surface2};
+  --pr-commented-icon-color: #{$ctp-overlay1};
+  --pr-commented-icon-background-color: #{$ctp-surface1};
+
+  --call-to-action-bubble-background-color: #{$ctp-mauve};
+  --call-to-action-bubble-color: #{$ctp-crust};
+
+  --title-tool-tip-background-color: #{$ctp-surface0};
+
+  // Markdown colors
+  --md-border-default-color: #{$ctp-surface1};
+  --md-border-muted-color: #{$ctp-surface0};
+  --md-canvas-default-color: #{$ctp-mantle};
+  --md-canvas-subtle-color: #{$ctp-base};
+  --md-fg-default-color: #{$ctp-text};
+  --md-fg-muted-color: #{$ctp-subtext0};
+  --md-danger-fg-color: #{$ctp-red};
+  --md-neutral-muted-color: #{rgba($ctp-overlay1, 0.4)};
+  --md-accent-emphasis-color: #{$ctp-blue};
+  --md-accent-fg-color: #{$ctp-blue};
+}

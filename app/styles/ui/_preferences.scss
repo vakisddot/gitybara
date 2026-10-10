@@ -188,6 +188,7 @@
 
           .theme-value-label {
             margin-left: calc(var(--spacing-triple));
+            white-space: nowrap;
           }
 
           img {

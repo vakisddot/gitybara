@@ -15,6 +15,7 @@ import { ThemeSource } from './theme-source'
 export enum ApplicationTheme {
   Light = 'light',
   Dark = 'dark',
+  CatppuccinMocha = 'catppuccin-mocha',
   System = 'system',
 }
 
@@ -30,10 +31,23 @@ export function getThemeName(theme: ApplicationTheme): ThemeSource {
     case ApplicationTheme.Light:
       return 'light'
     case ApplicationTheme.Dark:
+    // Catppuccin Mocha is a dark theme as far as the OS and the rest of the
+    // app are concerned, it only overrides the colors on top of the dark theme.
+    case ApplicationTheme.CatppuccinMocha:
       return 'dark'
     default:
       return 'system'
   }
+}
+
+/**
+ * Gets the body class name of the color scheme variant the given theme applies
+ * on top of its light/dark base theme, if any.
+ */
+export function getThemeVariantClassName(theme: ApplicationTheme) {
+  return theme === ApplicationTheme.CatppuccinMocha
+    ? 'theme-catppuccin-mocha'
+    : null
 }
 
 // The key under which the decision to automatically switch the theme is persisted
@@ -72,7 +86,8 @@ function getApplicationThemeSetting(): ApplicationTheme {
 
   if (
     themeSetting === ApplicationTheme.Light ||
-    themeSetting === ApplicationTheme.Dark
+    themeSetting === ApplicationTheme.Dark ||
+    themeSetting === ApplicationTheme.CatppuccinMocha
   ) {
     return themeSetting
   }

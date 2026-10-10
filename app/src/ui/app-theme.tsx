@@ -2,12 +2,19 @@ import * as React from 'react'
 import {
   ApplicationTheme,
   getThemeName,
+  getThemeVariantClassName,
   getCurrentlyAppliedTheme,
 } from './lib/application-theme'
 import * as ipcRenderer from '../lib/ipc-renderer'
 
 interface IAppThemeProps {
   readonly theme: ApplicationTheme
+
+  /**
+   * The theme the user selected, used to apply a color variant on top of the
+   * light/dark `theme` (which is the one actually in effect).
+   */
+  readonly selectedTheme?: ApplicationTheme
 }
 
 /**
@@ -42,11 +49,30 @@ export class AppTheme extends React.PureComponent<IAppThemeProps> {
       themeToDisplay = await getCurrentlyAppliedTheme()
     }
 
-    const newThemeClassName = `theme-${getThemeName(themeToDisplay)}`
+    const themeClassNames = [`theme-${getThemeName(themeToDisplay)}`]
 
-    if (!document.body.classList.contains(newThemeClassName)) {
+    // Variants only apply on top of the dark theme, so that they don't leak
+    // into places that force the light theme (like the welcome flow).
+    const variantClassName =
+      themeToDisplay === ApplicationTheme.Dark &&
+      this.props.selectedTheme !== undefined
+        ? getThemeVariantClassName(this.props.selectedTheme)
+        : null
+
+    if (variantClassName !== null) {
+      themeClassNames.push(variantClassName)
+    }
+
+    const currentThemeClassNames = [...document.body.classList].filter(c =>
+      c.startsWith('theme-')
+    )
+
+    if (
+      currentThemeClassNames.length !== themeClassNames.length ||
+      !themeClassNames.every(c => currentThemeClassNames.includes(c))
+    ) {
       this.clearThemes()
-      document.body.classList.add(newThemeClassName)
+      document.body.classList.add(...themeClassNames)
       this.updateColorScheme()
     }
   }
