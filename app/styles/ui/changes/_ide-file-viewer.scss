@@ -15,6 +15,26 @@
     min-width: 0;
   }
 
+  .ide-file-viewer-change-nav {
+    display: flex;
+    flex-shrink: 0;
+    margin-right: var(--spacing-half);
+
+    .ide-file-viewer-change-nav-button {
+      width: 24px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      color: var(--text-secondary-color);
+      background: transparent;
+
+      &:hover {
+        color: var(--text-color);
+        background: var(--box-hover-background-color);
+      }
+    }
+  }
+
   .ide-file-viewer-message {
     padding: var(--spacing-double);
     color: var(--text-secondary-color);
@@ -61,6 +81,45 @@
     color: var(--diff-line-number-color);
     background: var(--diff-gutter-background-color);
     border-right: 1px solid var(--diff-border-color);
+  }
+
+  // Marks the lines that differ from the committed version, in the colors the
+  // changed files use: a bar for added and modified lines and a triangle where
+  // lines were removed.
+  .ide-line-number {
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 3px;
+    }
+
+    &.change-added::before {
+      background: var(--color-new);
+    }
+
+    &.change-modified::before {
+      background: var(--color-modified);
+    }
+
+    &.change-removed-before::after,
+    &.change-removed-after::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      border: 4px solid transparent;
+      border-left-color: var(--color-deleted);
+    }
+
+    &.change-removed-before::after {
+      top: -4px;
+    }
+
+    &.change-removed-after::after {
+      bottom: -4px;
+    }
   }
 
   .ide-line-text {

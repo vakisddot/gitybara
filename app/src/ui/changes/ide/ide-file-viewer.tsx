@@ -1,16 +1,22 @@
 import * as React from 'react'
 import * as Path from 'path'
+import classNames from 'classnames'
+import memoizeOne from 'memoize-one'
 import { AutoSizer, Grid, GridCellProps } from 'react-virtualized'
 
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
+import { DiffType } from '../../../models/diff'
+import { getWorkingDirectoryDiff } from '../../../lib/git/diff'
 import { mapStatus } from '../../../lib/status'
 import { highlight } from '../../../lib/highlighter/worker'
 import { ITokens } from '../../../lib/highlighter/types'
 import { formatBytes } from '../../lib/bytes'
+import { Button } from '../../lib/button'
 import { syntaxHighlightLine } from '../../diff/diff-helpers'
 import { PathText } from '../../lib/path-text'
 import { Octicon, iconForStatus } from '../../octicons'
+import * as octicons from '../../octicons/octicons.generated'
 import {
   IdeFileContents,
   isHighlightable,
@@ -18,6 +24,13 @@ import {
 } from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
+import {
+  getChangeGroupStarts,
+  getLineChanges,
+  ILineChanges,
+  isSameLineChanges,
+  NoLineChanges,
+} from './ide-line-changes'
 
 /** The height of a line in pixels, keep in sync with the styles. */
 const LineHeight = 20
@@ -58,6 +71,9 @@ interface IIdeFileViewerState {
    */
   readonly tokens: ITokens | null
 
+  /** The lines that differ from the committed version, to mark in the gutter */
+  readonly lineChanges: ILineChanges
+
   /** The width in pixels of a character in the monospace font. */
   readonly characterWidth: number
 }
@@ -72,6 +88,17 @@ export class IdeFileViewer extends React.Component<
   private highlightRequestId = 0
   private reloadTimeoutId: number | null = null
   private measureRef = React.createRef<HTMLSpanElement>()
+  private gridRef = React.createRef<Grid>()
+
+  /** How far the lines are scrolled and how tall they are, in pixels */
+  private scrollTop = 0
+  private viewportHeight = 0
+
+  /** Where the last jump to a change went, to continue from there */
+  private lastJump: {
+    readonly row: number
+    readonly scrollTop: number
+  } | null = null
 
   public constructor(props: IIdeFileViewerProps) {
     super(props)
@@ -80,6 +107,7 @@ export class IdeFileViewer extends React.Component<
       contents: null,
       failed: false,
       tokens: null,
+      lineChanges: NoLineChanges,
       characterWidth: 7,
     }
   }
@@ -93,7 +121,13 @@ export class IdeFileViewer extends React.Component<
     if (prevProps.path !== this.props.path) {
       // Don't keep showing the previous file while the new one is read
       this.highlightRequestId++
-      this.setState({ contents: null, failed: false, tokens: null })
+      this.lastJump = null
+      this.setState({
+        contents: null,
+        failed: false,
+        tokens: null,
+        lineChanges: NoLineChanges,
+      })
       this.loadContents()
     } else if (prevProps.changedFiles !== this.props.changedFiles) {
       this.scheduleReload()
@@ -138,25 +172,68 @@ export class IdeFileViewer extends React.Component<
     }
 
     try {
-      const contents = await readIdeFileContents(repository, path)
+      const [contents, diffLineChanges] = await Promise.all([
+        readIdeFileContents(repository, path),
+        this.readLineChanges(this.getChange()),
+      ])
 
       // Ignore the result if the component is gone or a newer request exists
       if (this.unmounted || requestId !== this.loadRequestId) {
         return
       }
 
-      if (isSameContents(this.state.contents, contents)) {
+      // The committed version of a deleted file has nothing to compare to
+      const lineChanges =
+        contents.kind === 'text' && !contents.isDeleted
+          ? diffLineChanges
+          : NoLineChanges
+
+      const contentsChanged = !isSameContents(this.state.contents, contents)
+
+      if (
+        !contentsChanged &&
+        isSameLineChanges(this.state.lineChanges, lineChanges)
+      ) {
         return
       }
 
-      this.setState({ contents, failed: false, tokens: null })
-      this.highlightContents(contents)
+      this.setState(prevState => ({
+        contents,
+        lineChanges,
+        failed: false,
+        tokens: contentsChanged ? null : prevState.tokens,
+      }))
+
+      if (contentsChanged) {
+        this.highlightContents(contents)
+      }
     } catch (e) {
       log.error(`Failed to read ${path} to show it`, e)
 
       if (!this.unmounted && requestId === this.loadRequestId) {
         this.setState({ contents: null, failed: true })
       }
+    }
+  }
+
+  /** The lines of the file that differ from the committed version. */
+  private async readLineChanges(
+    change: WorkingDirectoryFileChange | undefined
+  ): Promise<ILineChanges> {
+    if (change === undefined) {
+      return NoLineChanges
+    }
+
+    try {
+      const diff = await getWorkingDirectoryDiff(this.props.repository, change)
+
+      return diff.kind === DiffType.Text
+        ? getLineChanges(diff.hunks)
+        : NoLineChanges
+    } catch (e) {
+      // The file is still shown, only without the markers
+      log.error(`Failed to get the changed lines of ${change.path}`, e)
+      return NoLineChanges
     }
   }
 
@@ -198,6 +275,96 @@ export class IdeFileViewer extends React.Component<
     return changedFiles.find(file => file.path === path)
   }
 
+  private getLines() {
+    const { contents } = this.state
+    return contents?.kind === 'text' ? contents.lines : null
+  }
+
+  private getChangeStarts = memoizeOne(getChangeGroupStarts)
+
+  /** The row that "next change" and "previous change" go on from. */
+  private getReferenceRow() {
+    const jump = this.lastJump
+
+    // Right after a jump, continue from the change that was jumped to
+    if (jump !== null && Math.abs(this.scrollTop - jump.scrollTop) < 1) {
+      return jump.row
+    }
+
+    const visibleRows = this.viewportHeight / LineHeight
+    return Math.floor(this.scrollTop / LineHeight) + Math.floor(visibleRows / 3)
+  }
+
+  private goToChange(direction: 1 | -1) {
+    const lines = this.getLines()
+
+    if (lines === null) {
+      return
+    }
+
+    const starts = this.getChangeStarts(this.state.lineChanges, lines.length)
+
+    if (starts.length === 0) {
+      return
+    }
+
+    const reference = this.getReferenceRow()
+    const target =
+      direction === 1
+        ? starts.find(start => start > reference) ?? starts[0]
+        : [...starts].reverse().find(start => start < reference) ??
+          starts[starts.length - 1]
+
+    // Leave some lines above the change so it has some context
+    const visibleRows = Math.floor(this.viewportHeight / LineHeight)
+    const scrollTop = Math.max(
+      0,
+      (target - Math.floor(visibleRows / 3)) * LineHeight
+    )
+
+    this.lastJump = { row: target, scrollTop }
+    this.gridRef.current?.scrollToPosition({ scrollLeft: 0, scrollTop })
+  }
+
+  private onPreviousChange = () => this.goToChange(-1)
+  private onNextChange = () => this.goToChange(1)
+
+  private onGridScroll = ({ scrollTop }: { readonly scrollTop: number }) => {
+    this.scrollTop = scrollTop
+  }
+
+  private renderChangeNavigation() {
+    const lines = this.getLines()
+
+    if (
+      lines === null ||
+      this.getChangeStarts(this.state.lineChanges, lines.length).length === 0
+    ) {
+      return null
+    }
+
+    return (
+      <div className="ide-file-viewer-change-nav">
+        <Button
+          className="ide-file-viewer-change-nav-button"
+          onClick={this.onPreviousChange}
+          tooltip="Previous change"
+          ariaLabel="Go to the previous change"
+        >
+          <Octicon symbol={octicons.arrowUp} />
+        </Button>
+        <Button
+          className="ide-file-viewer-change-nav-button"
+          onClick={this.onNextChange}
+          tooltip="Next change"
+          ariaLabel="Go to the next change"
+        >
+          <Octicon symbol={octicons.arrowDown} />
+        </Button>
+      </div>
+    )
+  }
+
   private renderHeader(path: string) {
     const change = this.getChange()
 
@@ -207,6 +374,7 @@ export class IdeFileViewer extends React.Component<
         <span className="ide-file-viewer-path">
           <PathText path={path} />
         </span>
+        {this.renderChangeNavigation()}
         {change !== undefined && (
           <Octicon
             symbol={iconForStatus(change.status)}
@@ -261,6 +429,7 @@ export class IdeFileViewer extends React.Component<
     height: number
   ) {
     const { characterWidth } = this.state
+    this.viewportHeight = height
     const gutterWidth = this.getGutterWidth(lines.length)
     const longestLine = getLongestLineLength(lines, this.props.tabSize)
     const contentWidth =
@@ -270,6 +439,8 @@ export class IdeFileViewer extends React.Component<
 
     return (
       <Grid
+        ref={this.gridRef}
+        onScroll={this.onGridScroll}
         width={width}
         height={height}
         columnCount={1}
@@ -286,6 +457,7 @@ export class IdeFileViewer extends React.Component<
         // Makes the grid render the lines again when they change
         lines={lines}
         tokens={this.state.tokens}
+        lineChanges={this.state.lineChanges}
         tabSize={this.props.tabSize}
         characterWidth={characterWidth}
         aria-label="File contents"
@@ -299,9 +471,19 @@ export class IdeFileViewer extends React.Component<
     lines: ReadonlyArray<string>,
     gutterWidth: number
   ) {
+    const { added, modified, removedBefore } = this.state.lineChanges
+    const isLast = rowIndex === lines.length - 1
+
+    const numberClassName = classNames('ide-line-number', {
+      'change-added': added.has(rowIndex),
+      'change-modified': modified.has(rowIndex),
+      'change-removed-before': removedBefore.has(rowIndex),
+      'change-removed-after': isLast && removedBefore.has(lines.length),
+    })
+
     return (
       <div key={key} style={style} className="ide-line">
-        <span className="ide-line-number" style={{ width: gutterWidth }}>
+        <span className={numberClassName} style={{ width: gutterWidth }}>
           {rowIndex + 1}
         </span>
         <span className="ide-line-text">
