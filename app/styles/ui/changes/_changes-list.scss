@@ -233,6 +233,15 @@
     color: var(--text-secondary-color);
   }
 
+  .ide-file-tree-filter {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--spacing-half);
+    padding: 0 var(--spacing) var(--spacing-half);
+    border-bottom: var(--base-border);
+  }
+
   .changes-tree-list {
     flex: 1;
 

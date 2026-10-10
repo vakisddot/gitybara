@@ -7,8 +7,10 @@ import { getRepositoryFilePaths } from '../../../lib/git/ls-files'
 import { mapStatus } from '../../../lib/status'
 import { SectionList } from '../../lib/list/section-list'
 import { RowIndexPath } from '../../lib/list/list-row-index-path'
+import { Checkbox, CheckboxValue } from '../../lib/checkbox'
 import { PathLabel } from '../../lib/path-label'
 import { PathText } from '../../lib/path-text'
+import { TextBox } from '../../lib/text-box'
 import { TooltipDirection } from '../../lib/tooltip'
 import { TooltippedContent } from '../../lib/tooltipped-content'
 import { Octicon, iconForStatus } from '../../octicons'
@@ -29,7 +31,9 @@ import { IdeIcon, IdeIconSpace } from './ide-icon'
 import {
   getChangedFileCountByDirectory,
   getCollapsedIdeDirectoryIds,
+  filterIdePaths,
   getDirectoriesContainingPaths,
+  isIdeFileFilterActive,
   mergeFilePaths,
   toggleIdeDirectory,
 } from './ide-file-tree-state'
@@ -63,6 +67,19 @@ interface IIdeFileTreeState {
   readonly repositoryPaths: ReadonlyArray<string> | null
   readonly loadFailed: boolean
   readonly expandedDirectoryIds: ReadonlySet<string>
+
+  /** Words that the paths of the files shown have to contain */
+  readonly filterText: string
+
+  /** Only show the files that have changes */
+  readonly changedOnly: boolean
+
+  /**
+   * While files are filtered every directory is open, except for the ones the
+   * user closed. These are kept apart from the directories that are open
+   * without a filter, so they are as they were when the filter is cleared.
+   */
+  readonly filterCollapsedIds: ReadonlySet<string>
 }
 
 /**
@@ -84,6 +101,9 @@ export class IdeFileTree extends React.Component<
       repositoryPaths: null,
       loadFailed: false,
       expandedDirectoryIds: new Set<string>(),
+      filterText: '',
+      changedOnly: false,
+      filterCollapsedIds: new Set<string>(),
     }
   }
 
@@ -179,12 +199,15 @@ export class IdeFileTree extends React.Component<
   private getFileItems = memoizeOne(
     (
       repositoryPaths: ReadonlyArray<string>,
-      changedPaths: ReadonlyArray<string>
+      changedPaths: ReadonlyArray<string>,
+      filterText: string,
+      changedOnly: boolean
     ): ReadonlyArray<IChangesTreeFileItem> =>
-      mergeFilePaths(repositoryPaths, changedPaths).map(path => ({
-        id: path,
-        path,
-      }))
+      filterIdePaths(
+        mergeFilePaths(repositoryPaths, changedPaths),
+        changedPaths,
+        { text: filterText, changedOnly }
+      ).map(path => ({ id: path, path }))
   )
 
   private getDirectoryIds = memoizeOne(
@@ -195,27 +218,47 @@ export class IdeFileTree extends React.Component<
   private getRows = memoizeOne(
     (
       fileItems: ReadonlyArray<IChangesTreeFileItem>,
-      expandedDirectoryIds: ReadonlySet<string>
+      expandedDirectoryIds: ReadonlySet<string> | null,
+      filterCollapsedIds: ReadonlySet<string>
     ): ReadonlyArray<IdeTreeRow> =>
       buildChangesTreeRows(
         fileItems,
-        getCollapsedIdeDirectoryIds(
-          this.getDirectoryIds(fileItems),
-          expandedDirectoryIds
-        )
+        expandedDirectoryIds === null
+          ? filterCollapsedIds
+          : getCollapsedIdeDirectoryIds(
+              this.getDirectoryIds(fileItems),
+              expandedDirectoryIds
+            )
       )
   )
 
+  private get isFiltering() {
+    const { filterText, changedOnly } = this.state
+    return isIdeFileFilterActive({ text: filterText, changedOnly })
+  }
+
   private getVisibleRows(): ReadonlyArray<IdeTreeRow> {
-    const { repositoryPaths, expandedDirectoryIds } = this.state
+    const {
+      repositoryPaths,
+      expandedDirectoryIds,
+      filterText,
+      changedOnly,
+      filterCollapsedIds,
+    } = this.state
 
     if (repositoryPaths === null) {
       return []
     }
 
     return this.getRows(
-      this.getFileItems(repositoryPaths, this.changedPaths),
-      expandedDirectoryIds
+      this.getFileItems(
+        repositoryPaths,
+        this.changedPaths,
+        filterText,
+        changedOnly
+      ),
+      this.isFiltering ? null : expandedDirectoryIds,
+      filterCollapsedIds
     )
   }
 
@@ -275,7 +318,21 @@ export class IdeFileTree extends React.Component<
   }
 
   private toggleDirectory(directoryId: string | null) {
-    if (directoryId !== null) {
+    if (directoryId === null) {
+      return
+    }
+
+    if (this.isFiltering) {
+      this.setState(prevState => {
+        const filterCollapsedIds = new Set(prevState.filterCollapsedIds)
+
+        if (!filterCollapsedIds.delete(directoryId)) {
+          filterCollapsedIds.add(directoryId)
+        }
+
+        return { filterCollapsedIds }
+      })
+    } else {
       this.setState(prevState => ({
         expandedDirectoryIds: toggleIdeDirectory(
           prevState.expandedDirectoryIds,
@@ -283,6 +340,45 @@ export class IdeFileTree extends React.Component<
         ),
       }))
     }
+  }
+
+  private onFilterTextChanged = (filterText: string) => {
+    this.setState({ filterText, filterCollapsedIds: new Set<string>() })
+  }
+
+  private onFilterKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape' && this.state.filterText !== '') {
+      event.preventDefault()
+      event.stopPropagation()
+      this.onFilterTextChanged('')
+    }
+  }
+
+  private onChangedOnlyChanged = (event: React.FormEvent<HTMLInputElement>) => {
+    this.setState({
+      changedOnly: event.currentTarget.checked,
+      filterCollapsedIds: new Set<string>(),
+    })
+  }
+
+  private renderFilter() {
+    return (
+      <div className="ide-file-tree-filter">
+        <TextBox
+          displayClearButton={true}
+          placeholder="Filter files"
+          ariaLabel="Filter files"
+          value={this.state.filterText}
+          onValueChanged={this.onFilterTextChanged}
+          onKeyDown={this.onFilterKeyDown}
+        />
+        <Checkbox
+          label="Show diff only"
+          value={this.state.changedOnly ? CheckboxValue.On : CheckboxValue.Off}
+          onChange={this.onChangedOnlyChanged}
+        />
+      </div>
+    )
   }
 
   private onDirectoryRowClick = (
@@ -444,32 +540,44 @@ export class IdeFileTree extends React.Component<
     const visibleRows = this.getVisibleRows()
 
     if (visibleRows.length === 0) {
-      return <div className="ide-file-tree-message">No files found.</div>
+      return (
+        <>
+          {this.renderFilter()}
+          <div className="ide-file-tree-message">
+            {this.isFiltering ? 'No files match.' : 'No files found.'}
+          </div>
+        </>
+      )
     }
 
     return (
-      <div className="filter-list changes-tree-list ide-file-tree">
-        <SectionList
-          id="ide-file-list"
-          rowCount={[visibleRows.length]}
-          rowRenderer={this.renderRow}
-          rowHeight={this.props.rowHeight}
-          selectedRows={this.getSelectedRows(
-            visibleRows,
-            this.props.selectedPath
-          )}
-          selectionMode="single"
-          canSelectRow={this.canSelectRow}
-          rowCustomClassNameMap={this.getDirectoryRowClassNameMap(visibleRows)}
-          onSelectionChanged={this.onSelectionChanged}
-          getRowAriaLabel={this.getRowAriaLabel}
-          invalidationProps={{
-            visibleRows,
-            changedFiles: this.props.changedFiles,
-            availableWidth: this.props.availableWidth,
-          }}
-        />
-      </div>
+      <>
+        {this.renderFilter()}
+        <div className="filter-list changes-tree-list ide-file-tree">
+          <SectionList
+            id="ide-file-list"
+            rowCount={[visibleRows.length]}
+            rowRenderer={this.renderRow}
+            rowHeight={this.props.rowHeight}
+            selectedRows={this.getSelectedRows(
+              visibleRows,
+              this.props.selectedPath
+            )}
+            selectionMode="single"
+            canSelectRow={this.canSelectRow}
+            rowCustomClassNameMap={this.getDirectoryRowClassNameMap(
+              visibleRows
+            )}
+            onSelectionChanged={this.onSelectionChanged}
+            getRowAriaLabel={this.getRowAriaLabel}
+            invalidationProps={{
+              visibleRows,
+              changedFiles: this.props.changedFiles,
+              availableWidth: this.props.availableWidth,
+            }}
+          />
+        </div>
+      </>
     )
   }
 }

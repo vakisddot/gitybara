@@ -4,6 +4,7 @@ import assert from 'node:assert'
 import {
   collapseIdeDirectory,
   expandIdeDirectory,
+  filterIdePaths,
   getChangedFileCountByDirectory,
   getCollapsedIdeDirectoryIds,
   getDirectoriesContainingPaths,
@@ -90,6 +91,45 @@ describe('ide-file-tree-state', () => {
       const paths = mergeFilePaths(['a.ts', 'b.ts'], ['b.ts', 'gone.ts'])
 
       assert.deepStrictEqual(paths, ['a.ts', 'b.ts', 'gone.ts'])
+    })
+  })
+
+  describe('filterIdePaths', () => {
+    const paths = ['README.md', 'src/index.ts', 'src/ui/App.tsx', 'docs/a.md']
+    const changed = ['src/ui/App.tsx']
+
+    it('keeps every path when nothing is filtered', () => {
+      const filter = { text: '  ', changedOnly: false }
+
+      assert.strictEqual(filterIdePaths(paths, changed, filter), paths)
+    })
+
+    it('finds paths with every word in any order, ignoring case', () => {
+      assert.deepStrictEqual(
+        filterIdePaths(paths, changed, { text: 'TS src', changedOnly: false }),
+        ['src/index.ts', 'src/ui/App.tsx']
+      )
+    })
+
+    it('matches the directories in a path too', () => {
+      assert.deepStrictEqual(
+        filterIdePaths(paths, changed, { text: 'docs', changedOnly: false }),
+        ['docs/a.md']
+      )
+    })
+
+    it('only keeps changed paths when asked to', () => {
+      assert.deepStrictEqual(
+        filterIdePaths(paths, changed, { text: '', changedOnly: true }),
+        ['src/ui/App.tsx']
+      )
+    })
+
+    it('combines the words with only the changed paths', () => {
+      assert.deepStrictEqual(
+        filterIdePaths(paths, changed, { text: 'index', changedOnly: true }),
+        []
+      )
     })
   })
 

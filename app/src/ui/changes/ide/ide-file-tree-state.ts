@@ -103,3 +103,42 @@ export function mergeFilePaths(
   // a change, so make sure it has a row.
   return Array.from(new Set([...repositoryPaths, ...changedPaths]))
 }
+
+/** What narrows down the files shown in the IDE view. */
+export interface IIdeFileFilter {
+  /** Words that every shown path has to contain, in any order */
+  readonly text: string
+
+  /** Only show the files that have changes */
+  readonly changedOnly: boolean
+}
+
+export function isIdeFileFilterActive(filter: IIdeFileFilter): boolean {
+  return filter.changedOnly || filter.text.trim() !== ''
+}
+
+/**
+ * The paths that pass the filter. Every word that was typed has to be somewhere
+ * in the path, ignoring case, so "src ts" finds "src/index.ts".
+ */
+export function filterIdePaths(
+  paths: ReadonlyArray<string>,
+  changedPaths: ReadonlyArray<string>,
+  filter: IIdeFileFilter
+): ReadonlyArray<string> {
+  if (!isIdeFileFilterActive(filter)) {
+    return paths
+  }
+
+  const words = filter.text.toLowerCase().split(/\s+/).filter(Boolean)
+  const changed = new Set(changedPaths)
+
+  return paths.filter(path => {
+    if (filter.changedOnly && !changed.has(path)) {
+      return false
+    }
+
+    const lowerCasePath = path.toLowerCase()
+    return words.every(word => lowerCasePath.includes(word))
+  })
+}
