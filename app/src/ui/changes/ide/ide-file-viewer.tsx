@@ -111,6 +111,7 @@ export class IdeFileViewer extends React.Component<
   private reloadTimeoutId: number | null = null
   private measureRef = React.createRef<HTMLSpanElement>()
   private gridRef = React.createRef<Grid>()
+  private linesRef = React.createRef<HTMLDivElement>()
 
   /** How far the lines are scrolled and how tall they are, in pixels */
   private scrollTop = 0
@@ -484,6 +485,23 @@ export class IdeFileViewer extends React.Component<
     }
   }
 
+  /**
+   * The buttons to fold blocks all show while the pointer is over the gutter.
+   * This is a class on the container instead of state so that the lines don't
+   * have to be drawn again every time the pointer moves in or out.
+   */
+  private onLinesMouseOver = (event: React.MouseEvent<HTMLDivElement>) => {
+    const inGutter =
+      event.target instanceof Element &&
+      event.target.closest('.ide-line-number') !== null
+
+    this.linesRef.current?.classList.toggle('gutter-hovered', inGutter)
+  }
+
+  private onLinesMouseLeave = () => {
+    this.linesRef.current?.classList.remove('gutter-hovered')
+  }
+
   private onPreviousChange = () => this.goToChange(-1)
   private onNextChange = () => this.goToChange(1)
 
@@ -595,7 +613,12 @@ export class IdeFileViewer extends React.Component<
             This file was deleted. Showing the last committed version.
           </div>
         )}
-        <div className="ide-file-viewer-lines cm-s-default">
+        <div
+          className="ide-file-viewer-lines cm-s-default"
+          ref={this.linesRef}
+          onMouseOver={this.onLinesMouseOver}
+          onMouseLeave={this.onLinesMouseLeave}
+        >
           <AutoSizer>
             {({ width, height }) => this.renderGrid(lines, width, height)}
           </AutoSizer>

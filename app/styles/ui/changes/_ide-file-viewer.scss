@@ -128,7 +128,7 @@
     padding-right: 2px;
   }
 
-  // The button to fold a block, shown when the pointer is on the line and
+  // The button to fold a block, shown while the pointer is over the gutter and
   // always for a block that is folded.
   .ide-line-fold-column {
     flex: 0 0 16px;
@@ -145,9 +145,12 @@
     opacity: 0;
     color: var(--text-secondary-color);
 
+    // The icon doesn't take the pointer, so the whole button does, with its
+    // pointer cursor, instead of the icon having its own default cursor.
     .octicon {
       width: 12px;
       height: 12px;
+      pointer-events: none;
     }
 
     &:hover {
@@ -159,11 +162,14 @@
     }
   }
 
-  .ide-line:hover .ide-line-fold {
+  .ide-file-viewer-lines.gutter-hovered .ide-line-fold {
     opacity: 1;
   }
 
   .ide-line-text {
+    // Fill the rest of the line, so the indent guides of an empty line aren't
+    // cut off where its text ends.
+    flex: 1 1 auto;
     padding-left: 12px;
     user-select: text;
   }
