@@ -4,6 +4,7 @@ import assert from 'node:assert'
 import {
   detectIndentUnit,
   getIndentColumns,
+  getIndentGuidesStyle,
   getLineIndentation,
 } from '../../src/ui/changes/ide/ide-indentation'
 
@@ -82,6 +83,20 @@ describe('ide-indentation', () => {
 
     it('handles files without lines', () => {
       assert.deepStrictEqual(getLineIndentation([], 4), [])
+    })
+  })
+
+  describe('getIndentGuidesStyle', () => {
+    it('draws nothing without indentation', () => {
+      assert.strictEqual(getIndentGuidesStyle(0, 4), undefined)
+    })
+
+    it('covers each level of indentation, counting a partial one', () => {
+      const style = getIndentGuidesStyle(9, 4, '12px')
+
+      assert.strictEqual(style?.backgroundSize, '12ch 100%')
+      assert.strictEqual(style?.backgroundPosition, '12px 0')
+      assert.match(style?.backgroundImage ?? '', /transparent 4ch\)$/)
     })
   })
 })

@@ -9,6 +9,10 @@ import {
   isRowChanged,
 } from './diff-helpers'
 import { ILineTokens } from '../../lib/highlighter/types'
+import {
+  getIndentColumns,
+  getIndentGuidesStyle,
+} from '../changes/ide/ide-indentation'
 import classNames from 'classnames'
 import { Octicon, OcticonSymbolVariant } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
@@ -144,6 +148,12 @@ interface ISideBySideDiffRowProps {
    * The width (in pixels) of the diff gutter.
    */
   readonly lineNumberWidth: number
+
+  /** The width of a tab character, in characters, to measure indentation */
+  readonly tabSize: number
+
+  /** How many columns one level of indentation is in the file */
+  readonly indentUnit: number
 
   /**
    * The index of the row in the displayed diff.
@@ -447,7 +457,13 @@ export class SideBySideDiffRow extends React.Component<
     return (
       <div className="content">
         <div className="prefix">&nbsp;&nbsp;{prefix}&nbsp;&nbsp;</div>
-        <div className="content-wrapper">
+        <div
+          className="content-wrapper"
+          style={getIndentGuidesStyle(
+            getIndentColumns(data.content, this.props.tabSize) ?? 0,
+            this.props.indentUnit
+          )}
+        >
           {/* Copy to clipboard will ignore empty "lines" unless we add br */}
           {data.content.length === 0 && <br />}
 

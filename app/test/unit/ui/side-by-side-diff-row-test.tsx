@@ -116,6 +116,8 @@ function renderSideBySideDiffRow(
     showSideBySideDiff: false,
     hideWhitespaceInDiff: false,
     lineNumberWidth: 3,
+    tabSize: 4,
+    indentUnit: 4,
     numRow: 0,
     onStartSelection: (row, column, select) => {
       startedSelections.push({ row, column, select })

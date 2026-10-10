@@ -72,6 +72,7 @@ import { findDOMNode } from 'react-dom'
 import escapeRegExp from 'lodash/escapeRegExp'
 import ReactDOM from 'react-dom'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
+import { detectIndentUnit } from '../changes/ide/ide-indentation'
 
 const DefaultRowHeight = 20
 
@@ -592,6 +593,9 @@ export class SideBySideDiff extends React.Component<
   public render() {
     const { diff, ariaLiveMessage, isSearching } = this.state
 
+    // Tabs are as wide as the tab size of the app, which the diff inherits
+    this.tabSize = getRenderedTabSize()
+
     const rows = this.getCurrentDiffRows()
     const containerClassName = classNames('side-by-side-diff-container', {
       'unified-diff': !this.props.showSideBySideDiff,
@@ -856,6 +860,17 @@ export class SideBySideDiff extends React.Component<
     return data
   }
 
+  /** The width of a tab character, as read when the diff was last drawn. */
+  private tabSize = 4
+
+  /** How many columns one level of indentation is, going by the whole diff. */
+  private getIndentUnit = memoize((diff: ITextDiff, tabSize: number) =>
+    detectIndentUnit(
+      diff.hunks.flatMap(hunk => hunk.lines.map(line => line.content)),
+      tabSize
+    )
+  )
+
   private renderRow = ({ index, parent, style, key }: ListRowProps) => {
     const { diff } = this.state
     const rows = getDiffRows(
@@ -890,6 +905,7 @@ export class SideBySideDiff extends React.Component<
     )
 
     const rowWithTokens = this.createFullRow(row, index)
+    const indentUnit = this.getIndentUnit(diff, this.tabSize)
 
     const rowSelectableGroupDetails = this.getRowSelectableGroupDetails(index)
 
@@ -905,6 +921,8 @@ export class SideBySideDiff extends React.Component<
           <SideBySideDiffRow
             row={rowWithTokens}
             lineNumberWidth={lineNumberWidth}
+            tabSize={this.tabSize}
+            indentUnit={indentUnit}
             numRow={index}
             isDiffSelectable={canSelect(this.props.file)}
             rowSelectableGroup={rowSelectableGroupDetails}
@@ -1771,6 +1789,17 @@ function highlightParametersEqual(
  * @param diff                The diff to use to calculate the rows.
  * @param showSideBySideDiff  Whether or not show the diff in side by side mode.
  */
+const DefaultTabSize = 4
+
+/** The width of a tab character in the app, which the diffs inherit. */
+function getRenderedTabSize() {
+  const chrome = document.getElementById('desktop-app-chrome')
+  const tabSize =
+    chrome === null ? NaN : parseInt(getComputedStyle(chrome).tabSize)
+
+  return Number.isInteger(tabSize) && tabSize > 0 ? tabSize : DefaultTabSize
+}
+
 const getDiffRows = memoize(function (
   diff: ITextDiff,
   showSideBySideDiff: boolean,

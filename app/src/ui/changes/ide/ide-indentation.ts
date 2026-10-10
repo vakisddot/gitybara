@@ -101,3 +101,33 @@ export function getLineIndentation(
 
   return indentation
 }
+
+/**
+ * The style that draws a line at each level of indentation in the indentation
+ * of a line, with the lines going from the start of the text. It's measured in
+ * characters so it only works in a monospace font. Without any indentation
+ * there is nothing to draw.
+ *
+ * @param columns  How many columns the line is indented.
+ * @param unit     How many columns one level of indentation is.
+ * @param offset   Where the text starts, as a CSS length.
+ */
+export function getIndentGuidesStyle(
+  columns: number,
+  unit: number,
+  offset = '0px'
+) {
+  if (columns <= 0 || unit <= 0) {
+    return undefined
+  }
+
+  const guideCount = Math.ceil(columns / unit)
+  const color = 'var(--ide-indent-guide-color)'
+
+  return {
+    backgroundImage: `repeating-linear-gradient(to right, ${color} 0, ${color} 1px, transparent 1px, transparent ${unit}ch)`,
+    backgroundSize: `${guideCount * unit}ch 100%`,
+    backgroundPosition: `${offset} 0`,
+    backgroundRepeat: 'no-repeat',
+  }
+}
