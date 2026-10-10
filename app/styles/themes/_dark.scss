@@ -102,6 +102,7 @@ body.theme-dark {
    * Guide line color for the Changes tree view.
    */
   --changes-tree-guide-color: #{rgba($white, 0.10)};
+  --ide-indent-guide-color: #{rgba($white, 0.14)};
 
   // slightly lighter of gray-500 to get 3:1 contrast ratio against
   // --box-alt-background-color

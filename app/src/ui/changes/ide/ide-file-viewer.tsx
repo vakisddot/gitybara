@@ -24,6 +24,7 @@ import {
 } from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
+import { detectIndentUnit, getLineIndentation } from './ide-indentation'
 import {
   getChangeGroupStarts,
   getLineChanges,
@@ -40,6 +41,9 @@ const TrailingColumns = 4
 
 /** Padding on each side of the line numbers, in pixels. */
 const GutterPadding = 12
+
+/** Padding to the left of the text of a line, keep in sync with the styles. */
+const TextPadding = 12
 
 /** How long to wait after the changes updated before reading the file again */
 const ReloadDelay = 200
@@ -282,6 +286,36 @@ export class IdeFileViewer extends React.Component<
 
   private getChangeStarts = memoizeOne(getChangeGroupStarts)
 
+  private getIndentation = memoizeOne(
+    (lines: ReadonlyArray<string>, tabSize: number) => ({
+      unit: detectIndentUnit(lines, tabSize),
+      columns: getLineIndentation(lines, tabSize),
+    })
+  )
+
+  /** The style that draws the indent guides in the indentation of a line. */
+  private getIndentGuidesStyle(
+    columns: number,
+    unit: number
+  ): React.CSSProperties | undefined {
+    if (columns <= 0) {
+      return undefined
+    }
+
+    const unitWidth = unit * this.state.characterWidth
+    const guideCount = Math.ceil(columns / unit)
+    const color = 'var(--ide-indent-guide-color)'
+
+    // A 1px line at the start of each level of indentation, from the start of
+    // the text to the end of the indentation.
+    return {
+      backgroundImage: `repeating-linear-gradient(to right, ${color} 0, ${color} 1px, transparent 1px, transparent ${unitWidth}px)`,
+      backgroundSize: `${guideCount * unitWidth}px 100%`,
+      backgroundPosition: `${TextPadding}px 0`,
+      backgroundRepeat: 'no-repeat',
+    }
+  }
+
   /** The row that "next change" and "previous change" go on from. */
   private getReferenceRow() {
     const jump = this.lastJump
@@ -473,6 +507,7 @@ export class IdeFileViewer extends React.Component<
   ) {
     const { added, modified, removedBefore } = this.state.lineChanges
     const isLast = rowIndex === lines.length - 1
+    const indentation = this.getIndentation(lines, this.props.tabSize)
 
     const numberClassName = classNames('ide-line-number', {
       'change-added': added.has(rowIndex),
@@ -486,7 +521,13 @@ export class IdeFileViewer extends React.Component<
         <span className={numberClassName} style={{ width: gutterWidth }}>
           {rowIndex + 1}
         </span>
-        <span className="ide-line-text">
+        <span
+          className="ide-line-text"
+          style={this.getIndentGuidesStyle(
+            indentation.columns[rowIndex],
+            indentation.unit
+          )}
+        >
           {this.renderLineText(lines[rowIndex], this.state.tokens?.[rowIndex])}
         </span>
       </div>

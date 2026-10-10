@@ -97,6 +97,7 @@ body.theme-catppuccin-mocha {
   --box-border-color: #{$ctp-crust};
 
   --changes-tree-guide-color: #{rgba($ctp-text, 0.1)};
+  --ide-indent-guide-color: #{$ctp-surface1};
 
   --box-border-contrast-color: #{$ctp-overlay0};
   --box-border-accent-color: #{$ctp-mauve};
