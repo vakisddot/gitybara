@@ -24,7 +24,8 @@ import { IssuesStore, GitHubUserStore } from '../lib/stores'
 import { assertNever } from '../lib/fatal-error'
 import { Account } from '../models/account'
 import { FocusContainer } from './lib/focus-container'
-import { ImageDiffType } from '../models/diff'
+import { DiffType, ImageDiffType } from '../models/diff'
+import { DiffOptions } from './diff/diff-options'
 import { IMenu } from '../models/app-menu'
 import { StashDiffViewer } from './stashing'
 import { StashedChangesLoadStates } from '../models/stash-entry'
@@ -54,6 +55,7 @@ interface IRepositoryViewProps {
   readonly hideWhitespaceInChangesDiff: boolean
   readonly hideWhitespaceInHistoryDiff: boolean
   readonly showSideBySideDiff: boolean
+  readonly showFullFileDiff: boolean
   readonly showDiffCheckMarks: boolean
   readonly preferAbsoluteDates: boolean
   readonly askForConfirmationOnDiscardChanges: boolean
@@ -521,6 +523,8 @@ export class RepositoryView extends React.Component<
         hideWhitespaceInDiff={this.props.hideWhitespaceInHistoryDiff}
         showSideBySideDiff={this.props.showSideBySideDiff}
         onOpenBinaryFile={this.onOpenBinaryFile}
+        showFullFileDiff={this.props.showFullFileDiff}
+        tabSize={this.props.selectedTabSize}
         onOpenSubmodule={this.onOpenSubmodule}
         onChangeImageDiffType={this.onChangeImageDiffType}
         onDiffOptionsOpened={this.onDiffOptionsOpened}
@@ -569,6 +573,7 @@ export class RepositoryView extends React.Component<
       return (
         <IdeFileViewer
           repository={this.props.repository}
+          key="ide-view"
           path={changesState.ideSelectedFilePath}
           changedFiles={workingDirectory.files}
           tabSize={this.props.selectedTabSize}
@@ -616,6 +621,21 @@ export class RepositoryView extends React.Component<
       }
 
       return (
+      // Show the whole file, as the IDE view does, where there is text to show
+      if (this.props.showFullFileDiff && diff?.kind === DiffType.Text) {
+        return (
+          <IdeFileViewer
+            key="full-file-diff"
+            repository={this.props.repository}
+            path={selectedFile.path}
+            changedFiles={workingDirectory.files}
+            tabSize={this.props.selectedTabSize}
+            readOnly={true}
+            headerExtras={this.renderChangesDiffOptions()}
+          />
+        )
+      }
+
         <Changes
           repository={this.props.repository}
           dispatcher={this.props.dispatcher}
@@ -626,6 +646,9 @@ export class RepositoryView extends React.Component<
           hideWhitespaceInDiff={this.props.hideWhitespaceInChangesDiff}
           showSideBySideDiff={this.props.showSideBySideDiff}
           showDiffCheckMarks={this.props.showDiffCheckMarks}
+          // Text files are shown in full above, so this is for other kinds
+          showFullFile={false}
+          onShowFullFileChanged={this.onShowFullFileChanged}
           onOpenBinaryFile={this.onOpenBinaryFile}
           onOpenSubmodule={this.onOpenSubmodule}
           onChangeImageDiffType={this.onChangeImageDiffType}
@@ -639,6 +662,29 @@ export class RepositoryView extends React.Component<
   }
 
   private onOpenBinaryFile = (fullPath: string) => {
+  private renderChangesDiffOptions() {
+    return (
+      <DiffOptions
+        isInteractiveDiff={false}
+        hideWhitespaceChanges={this.props.hideWhitespaceInChangesDiff}
+        onHideWhitespaceChangesChanged={this.onHideWhitespaceInDiffChanged}
+        showSideBySideDiff={this.props.showSideBySideDiff}
+        onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
+        showFullFile={this.props.showFullFileDiff}
+        onShowFullFileChanged={this.onShowFullFileChanged}
+        onDiffOptionsOpened={this.onDiffOptionsOpened}
+      />
+    )
+  }
+
+  private onShowSideBySideDiffChanged = (showSideBySideDiff: boolean) => {
+    this.props.dispatcher.onShowSideBySideDiffChanged(showSideBySideDiff)
+  }
+
+  private onShowFullFileChanged = (showFullFile: boolean) => {
+    this.props.dispatcher.onShowFullFileDiffChanged(showFullFile)
+  }
+
     openFile(fullPath, this.props.dispatcher)
   }
 

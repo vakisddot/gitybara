@@ -8,12 +8,12 @@ import {
   decodeFileContents,
   isBinaryBuffer,
   isHighlightable,
+  joinLines,
   MaxHighlightedFileLength,
   MaxViewableFileSize,
   readIdeFileContents,
   splitIntoLines,
 } from '../../src/ui/changes/ide/ide-file-contents'
-import { getLongestLineLength } from '../../src/ui/changes/ide/ide-file-viewer'
 import { setupEmptyRepository } from '../helpers/repositories'
 
 describe('ide-file-contents', () => {
@@ -57,8 +57,40 @@ describe('ide-file-contents', () => {
       assert.deepStrictEqual(result, {
         kind: 'text',
         lines: ['a', 'b'],
+        format: {
+          lineEnding: '\n',
+          hasByteOrderMark: true,
+          endsWithNewline: true,
+        },
         isDeleted: false,
       })
+    })
+
+    it('remembers the line ending and a missing final newline', () => {
+      const result = decodeFileContents(Buffer.from('a\r\nb'), false)
+
+      assert.deepStrictEqual(result, {
+        kind: 'text',
+        lines: ['a', 'b'],
+        format: {
+          lineEnding: '\r\n',
+          hasByteOrderMark: false,
+          endsWithNewline: false,
+        },
+        isDeleted: false,
+      })
+    })
+
+    it('writes back what was read for each format', () => {
+      for (const text of ['a\nb\n', 'a\r\nb\r\n', 'a\nb', '﻿a\r\nb\r\n']) {
+        const result = decodeFileContents(Buffer.from(text), false)
+
+        assert.strictEqual(result.kind, 'text')
+
+        if (result.kind === 'text') {
+          assert.strictEqual(joinLines(result.lines, result.format), text)
+        }
+      }
     })
 
     it('reports binary files', () => {
@@ -90,6 +122,11 @@ describe('ide-file-contents', () => {
       assert.deepStrictEqual(result, {
         kind: 'text',
         lines: ['one', 'two'],
+        format: {
+          lineEnding: '\n',
+          hasByteOrderMark: false,
+          endsWithNewline: true,
+        },
         isDeleted: false,
       })
     })
@@ -106,6 +143,11 @@ describe('ide-file-contents', () => {
       assert.deepStrictEqual(result, {
         kind: 'text',
         lines: ['old'],
+        format: {
+          lineEnding: '\n',
+          hasByteOrderMark: false,
+          endsWithNewline: true,
+        },
         isDeleted: true,
       })
     })
@@ -143,20 +185,6 @@ describe('ide-file-contents', () => {
         isHighlightable(['a'.repeat(MaxHighlightedFileLength)]),
         false
       )
-    })
-  })
-
-  describe('getLongestLineLength', () => {
-    it('finds the longest line', () => {
-      assert.strictEqual(getLongestLineLength(['ab', 'abcd', 'abc'], 4), 4)
-    })
-
-    it('counts tabs as the tab size', () => {
-      assert.strictEqual(getLongestLineLength(['\t\tab'], 4), 10)
-    })
-
-    it('is zero without lines', () => {
-      assert.strictEqual(getLongestLineLength([], 4), 0)
     })
   })
 })

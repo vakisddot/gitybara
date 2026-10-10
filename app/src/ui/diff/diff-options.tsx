@@ -21,6 +21,13 @@ interface IDiffOptionsProps {
   readonly showSideBySideDiff: boolean
   readonly onShowSideBySideDiffChanged: (showSideBySideDiff: boolean) => void
 
+  /**
+   * Whether the whole file is shown instead of the diff. The option to do so
+   * is only offered where the view can, so it needs both of these.
+   */
+  readonly showFullFile?: boolean
+  readonly onShowFullFileChanged?: (showFullFile: boolean) => void
+
   /** Called when the user opens the diff options popover */
   readonly onDiffOptionsOpened: () => void
 }
@@ -126,11 +133,23 @@ export class DiffOptions extends React.Component<
     )
   }
 
+  private get isFullFileShown() {
+    return (
+      this.props.onShowFullFileChanged !== undefined &&
+      this.props.showFullFile === true
+    )
+  }
+
   private onUnifiedSelected = () => {
+    this.props.onShowFullFileChanged?.(false)
     this.props.onShowSideBySideDiffChanged(false)
   }
   private onSideBySideSelected = () => {
+    this.props.onShowFullFileChanged?.(false)
     this.props.onShowSideBySideDiffChanged(true)
+  }
+  private onFullFileSelected = () => {
+    this.props.onShowFullFileChanged?.(true)
   }
 
   private renderShowSideBySide() {
@@ -139,13 +158,13 @@ export class DiffOptions extends React.Component<
         <legend>Diff display</legend>
         <RadioButton
           value="Unified"
-          checked={!this.props.showSideBySideDiff}
+          checked={!this.props.showSideBySideDiff && !this.isFullFileShown}
           label="Unified"
           onSelected={this.onUnifiedSelected}
         />
         <RadioButton
           value="Split"
-          checked={this.props.showSideBySideDiff}
+          checked={this.props.showSideBySideDiff && !this.isFullFileShown}
           label={
             <>
               <div>Split</div>
@@ -153,6 +172,14 @@ export class DiffOptions extends React.Component<
           }
           onSelected={this.onSideBySideSelected}
         />
+        {this.props.onShowFullFileChanged !== undefined && (
+          <RadioButton
+            value="Full file"
+            checked={this.isFullFileShown}
+            label="Full file"
+            onSelected={this.onFullFileSelected}
+          />
+        )}
       </fieldset>
     )
   }

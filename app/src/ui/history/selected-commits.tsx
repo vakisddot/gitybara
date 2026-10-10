@@ -5,7 +5,7 @@ import * as Path from 'path'
 import { Repository } from '../../models/repository'
 import { CommittedFileChange } from '../../models/status'
 import { Commit } from '../../models/commit'
-import { IDiff, ImageDiffType } from '../../models/diff'
+import { DiffType, IDiff, ImageDiffType } from '../../models/diff'
 
 import { encodePathAsUrl } from '../../lib/path'
 import { revealInFileManager } from '../../lib/app-shell'
@@ -36,6 +36,8 @@ import { pathExists } from '../../lib/path-exists'
 import { UnreachableCommitsTab } from './unreachable-commits-dialog'
 import { ExpandableCommitSummary } from './expandable-commit-summary'
 import { DiffHeader } from '../diff/diff-header'
+import { DiffOptions } from '../diff/diff-options'
+import { IdeFileViewer } from '../changes/ide/ide-file-viewer'
 import { Account } from '../../models/account'
 import { Emoji } from '../../lib/emoji'
 
@@ -65,6 +67,12 @@ interface ISelectedCommitsProps {
 
   /** Whether we should display side by side diffs. */
   readonly showSideBySideDiff: boolean
+
+  /** Whether to show the whole file instead of the diff */
+  readonly showFullFileDiff: boolean
+
+  /** The width of a tab character, in characters. */
+  readonly tabSize: number
 
   /**
    * Called when the user requests to open a binary file in an the
@@ -155,6 +163,40 @@ export class SelectedCommits extends React.Component<
       )
     }
 
+    // The whole file as it was in the last of the commits, where it's text
+    const latestSha = this.getLatestSha()
+    if (
+      this.props.showFullFileDiff &&
+      diff?.kind === DiffType.Text &&
+      latestSha !== null
+    ) {
+      return (
+        <IdeFileViewer
+          key="history-full-file"
+          repository={this.props.repository}
+          path={file.path}
+          changedFiles={[]}
+          tabSize={this.props.tabSize}
+          readOnly={true}
+          commit={{ sha: latestSha, diff, status: file.status }}
+          headerExtras={
+            <DiffOptions
+              isInteractiveDiff={false}
+              hideWhitespaceChanges={this.props.hideWhitespaceInDiff}
+              onHideWhitespaceChangesChanged={
+                this.onHideWhitespaceInDiffChanged
+              }
+              showSideBySideDiff={this.props.showSideBySideDiff}
+              onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
+              showFullFile={this.props.showFullFileDiff}
+              onShowFullFileChanged={this.onShowFullFileChanged}
+              onDiffOptionsOpened={this.props.onDiffOptionsOpened}
+            />
+          }
+        />
+      )
+    }
+
     return (
       <div className="diff-container">
         {this.renderDiffHeader()}
@@ -191,6 +233,9 @@ export class SelectedCommits extends React.Component<
         status={status}
         showSideBySideDiff={this.props.showSideBySideDiff}
         onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
+        // Text files are shown in full above, so this is for other kinds
+        showFullFile={false}
+        onShowFullFileChanged={this.onShowFullFileChanged}
         hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}
         onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
         onDiffOptionsOpened={this.props.onDiffOptionsOpened}
@@ -240,6 +285,25 @@ export class SelectedCommits extends React.Component<
 
   private onShowSideBySideDiffChanged = (showSideBySideDiff: boolean) => {
     this.props.dispatcher.onShowSideBySideDiffChanged(showSideBySideDiff)
+  }
+
+  private onShowFullFileChanged = (showFullFile: boolean) => {
+    this.props.dispatcher.onShowFullFileDiffChanged(showFullFile)
+  }
+
+  /**
+   * The newest of the commits in the diff, which is the one the whole file is
+   * shown as it was in. It's the one that none of the others has as a parent.
+   */
+  private getLatestSha(): string | null {
+    const { shasInDiff, selectedCommits } = this.props
+    const parents = new Set(
+      selectedCommits
+        .filter(commit => shasInDiff.includes(commit.sha))
+        .flatMap(commit => commit.parentSHAs)
+    )
+
+    return shasInDiff.find(sha => !parents.has(sha)) ?? null
   }
 
   private onCommitSummaryReset = () => {

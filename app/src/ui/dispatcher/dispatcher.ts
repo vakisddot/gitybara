@@ -2429,6 +2429,11 @@ export class Dispatcher {
     return this.appStore._setShowSideBySideDiff(showSideBySideDiff)
   }
 
+  /** Change the setting to show the whole file instead of the diff */
+  public onShowFullFileDiffChanged(showFullFileDiff: boolean) {
+    return this.appStore._setShowFullFileDiff(showFullFileDiff)
+  }
+
   /** Install the global Git LFS filters. */
   public installGlobalLFSFilters(force: boolean): Promise<void> {
     return this.appStore._installGlobalLFSFilters(force)

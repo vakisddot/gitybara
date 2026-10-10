@@ -1,39 +1,29 @@
 import * as React from 'react'
-import * as Path from 'path'
-import classNames from 'classnames'
 import memoizeOne from 'memoize-one'
-import { AutoSizer, Grid, GridCellProps } from 'react-virtualized'
 
+import { getBoolean, setBoolean } from '../../../lib/local-storage'
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
-import { DiffType } from '../../../models/diff'
+import { AppFileStatus } from '../../../models/status'
+import { DiffType, IDiff } from '../../../models/diff'
 import { getWorkingDirectoryDiff } from '../../../lib/git/diff'
 import { mapStatus } from '../../../lib/status'
-import { highlight } from '../../../lib/highlighter/worker'
-import { ITokens } from '../../../lib/highlighter/types'
 import { formatBytes } from '../../lib/bytes'
 import { Button } from '../../lib/button'
-import { syntaxHighlightLine } from '../../diff/diff-helpers'
 import { PathText } from '../../lib/path-text'
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
+import { IdeCodeEditor } from './ide-code-editor'
 import {
   IdeFileContents,
   isHighlightable,
+  readCommitFileContents,
   readIdeFileContents,
+  writeIdeFileLines,
 } from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
-import {
-  getFoldRanges,
-  getFoldRangesByStart,
-  getVisibleIndexOfLine,
-  getVisibleLines,
-  IFoldRange,
-  pruneFoldedLines,
-  unfoldBlocksHiding,
-} from './ide-folding'
-import { detectIndentUnit, getLineIndentation } from './ide-indentation'
+import { getFoldRanges } from './ide-folding'
 import {
   getChangeGroupStarts,
   getLineChanges,
@@ -42,26 +32,34 @@ import {
   NoLineChanges,
 } from './ide-line-changes'
 
-/** The height of a line in pixels, keep in sync with the styles. */
-const LineHeight = 20
-
-/** Room to the right of the longest line, in characters. */
-const TrailingColumns = 4
-
-/** Padding on each side of the line numbers, in pixels. */
-const GutterPadding = 12
-
-/** Padding to the left of the text of a line, keep in sync with the styles. */
-const TextPadding = 12
-
-/** The width of the column of the gutter with the buttons to fold blocks. */
-const FoldColumnWidth = 16
-
 /** How long to wait after the changes updated before reading the file again */
 const ReloadDelay = 200
 
-/** The characters of the sample used to measure the width of a character. */
-const MeasureSample = '0'.repeat(100)
+const HighlightChangesKey = 'ide-highlight-changes'
+
+/** Edits that weren't saved and the text of the file they were made to. */
+interface IDraft {
+  readonly text: string
+  readonly base: string
+}
+
+/**
+ * The edits that weren't saved, by repository and file. They are kept when
+ * another file is shown, or when the viewer goes away, so that they aren't lost.
+ */
+const unsavedDrafts = new Map<string, IDraft>()
+
+const getDraftKey = (repository: Repository, path: string) =>
+  `${repository.path}\0${path}`
+
+/** A commit to show the file of, instead of the working directory. */
+export interface IIdeFileViewerCommit {
+  readonly sha: string
+
+  /** The diff of the file, to mark the lines that changed */
+  readonly diff: IDiff | null
+  readonly status: AppFileStatus
+}
 
 interface IIdeFileViewerProps {
   readonly repository: Repository
@@ -74,53 +72,62 @@ interface IIdeFileViewerProps {
 
   /** The width of a tab character, in characters. */
   readonly tabSize: number
+
+  /** Shown at the end of the header, for the options of the view */
+  readonly headerExtras?: React.ReactNode
+
+  /** Whether the file can't be edited, which also leaves out unsaved edits */
+  readonly readOnly?: boolean
+
+  /**
+   * Show the file as it was in this commit. The file is then never read again
+   * and the changed files aren't looked at.
+   */
+  readonly commit?: IIdeFileViewerCommit
 }
 
 interface IIdeFileViewerState {
   /** What is shown for the path, null while it's being read */
   readonly contents: IdeFileContents | null
-  readonly failed: boolean
 
-  /**
-   * The syntax highlighting of the lines, by line index. It's null until the
-   * highlighter is done, and for files that aren't highlighted.
-   */
-  readonly tokens: ITokens | null
+  /** The path that the contents are of */
+  readonly contentsPath: string | null
+  readonly failed: boolean
 
   /** The lines that differ from the committed version, to mark in the gutter */
   readonly lineChanges: ILineChanges
 
-  /**
-   * The blocks that are folded, by the line they start on, with the text of
-   * that line to tell if it's still the same block after the file changed.
-   */
-  readonly folded: ReadonlyMap<number, string>
+  /** Goes up when the editor has to take the text of the file again */
+  readonly revision: number
 
-  /** The width in pixels of a character in the monospace font. */
-  readonly characterWidth: number
+  /** What was typed in the file and not saved, when the editor is opened */
+  readonly draft: string | null
+
+  /** Whether the text in the editor differs from the saved text */
+  readonly isDirty: boolean
+
+  /** The file changed on disk while there were edits that weren't saved. */
+  readonly changedOnDisk: boolean
+  readonly saveError: string | null
+
+  /** Whether the lines that have changes have a color in the background */
+  readonly highlightChanges: boolean
 }
 
-/** Read-only view of a file of the repository, without any of the diff. */
+/** A file of the repository to read and edit, without any of the diff. */
 export class IdeFileViewer extends React.Component<
   IIdeFileViewerProps,
   IIdeFileViewerState
 > {
   private unmounted = false
   private loadRequestId = 0
-  private highlightRequestId = 0
   private reloadTimeoutId: number | null = null
-  private measureRef = React.createRef<HTMLSpanElement>()
-  private gridRef = React.createRef<Grid>()
-  private linesRef = React.createRef<HTMLDivElement>()
+  private editorRef = React.createRef<IdeCodeEditor>()
 
-  /** How far the lines are scrolled and how tall they are, in pixels */
-  private scrollTop = 0
-  private viewportHeight = 0
-
-  /** Where the last jump to a change went, to continue from there */
-  private lastJump: {
-    readonly line: number
-    readonly scrollTop: number
+  /** What was read last, which isn't shown while there are unsaved edits */
+  private latest: {
+    readonly contents: IdeFileContents
+    readonly lineChanges: ILineChanges
   } | null = null
 
   public constructor(props: IIdeFileViewerProps) {
@@ -128,51 +135,85 @@ export class IdeFileViewer extends React.Component<
 
     this.state = {
       contents: null,
+      contentsPath: null,
       failed: false,
-      tokens: null,
       lineChanges: NoLineChanges,
-      folded: new Map<number, string>(),
-      characterWidth: 7,
+      revision: 0,
+      draft: null,
+      isDirty: false,
+      changedOnDisk: false,
+      saveError: null,
+      highlightChanges: getBoolean(HighlightChangesKey, false),
     }
   }
 
   public componentDidMount() {
-    this.measureCharacterWidth()
     this.loadContents()
   }
 
-  public componentDidUpdate(prevProps: IIdeFileViewerProps) {
+  public getSnapshotBeforeUpdate(prevProps: IIdeFileViewerProps) {
+    // The editor still has the text of the previous file, keep the edits
     if (prevProps.path !== this.props.path) {
+      this.keepUnsavedEdits(prevProps.repository, prevProps.path)
+    }
+
+    return null
+  }
+
+  public componentDidUpdate(prevProps: IIdeFileViewerProps) {
+    if (
+      prevProps.path !== this.props.path ||
+      prevProps.commit?.sha !== this.props.commit?.sha
+    ) {
       // Don't keep showing the previous file while the new one is read
-      this.highlightRequestId++
-      this.lastJump = null
+      this.latest = null
       this.setState({
         contents: null,
+        contentsPath: null,
         failed: false,
-        tokens: null,
         lineChanges: NoLineChanges,
-        folded: new Map<number, string>(),
+        draft: null,
+        isDirty: false,
+        changedOnDisk: false,
+        saveError: null,
       })
       this.loadContents()
-    } else if (prevProps.changedFiles !== this.props.changedFiles) {
+    } else if (prevProps.commit?.diff !== this.props.commit?.diff) {
+      this.loadContents()
+    } else if (
+      this.props.commit === undefined &&
+      prevProps.changedFiles !== this.props.changedFiles
+    ) {
       this.scheduleReload()
     }
   }
 
   public componentWillUnmount() {
     this.unmounted = true
+    this.keepUnsavedEdits(this.props.repository, this.props.path)
 
     if (this.reloadTimeoutId !== null) {
       window.clearTimeout(this.reloadTimeoutId)
     }
   }
 
-  private measureCharacterWidth() {
-    const width = this.measureRef.current?.getBoundingClientRect().width
+  private keepUnsavedEdits(repository: Repository, path: string | null) {
+    const editor = this.editorRef.current
+    const { contents, isDirty } = this.state
 
-    if (width !== undefined && width > 0) {
-      this.setState({ characterWidth: width / MeasureSample.length })
+    if (
+      path === null ||
+      editor === null ||
+      !isDirty ||
+      contents?.kind !== 'text'
+    ) {
+      return
     }
+
+    unsavedDrafts.set(getDraftKey(repository, path), {
+      text: editor.getLines().join('\n'),
+      base: contents.lines.join('\n'),
+    })
   }
 
   private scheduleReload() {
@@ -197,9 +238,14 @@ export class IdeFileViewer extends React.Component<
     }
 
     try {
+      const { commit } = this.props
       const [contents, diffLineChanges] = await Promise.all([
-        readIdeFileContents(repository, path),
-        this.readLineChanges(this.getChange()),
+        commit === undefined
+          ? readIdeFileContents(repository, path)
+          : readCommitFileContents(repository, commit.sha, path),
+        commit === undefined
+          ? this.readLineChanges(this.getChange())
+          : getLineChangesOfDiff(commit.diff),
       ])
 
       // Ignore the result if the component is gone or a newer request exists
@@ -213,40 +259,66 @@ export class IdeFileViewer extends React.Component<
           ? diffLineChanges
           : NoLineChanges
 
-      const contentsChanged = !isSameContents(this.state.contents, contents)
+      this.latest = { contents, lineChanges }
+
+      const { state } = this
+      const isOpened = state.contentsPath === path
+      const contentsChanged =
+        !isOpened || !isSameContents(state.contents, contents)
+
+      // Edits that weren't saved stay in the editor, the user decides what to
+      // do about the file having changed
+      if (isOpened && state.isDirty) {
+        if (contentsChanged) {
+          this.setState({ changedOnDisk: true })
+        }
+
+        return
+      }
 
       if (
         !contentsChanged &&
-        isSameLineChanges(this.state.lineChanges, lineChanges)
+        isSameLineChanges(state.lineChanges, lineChanges)
       ) {
         return
       }
 
-      this.setState(prevState => ({
-        contents,
-        lineChanges,
-        failed: false,
-        tokens: contentsChanged ? null : prevState.tokens,
-        folded:
-          contents.kind === 'text'
-            ? pruneFoldedLines(
-                prevState.folded,
-                contents.lines,
-                this.getFolding(contents.lines, this.props.tabSize).byStart
-              )
-            : new Map<number, string>(),
-      }))
-
-      if (contentsChanged) {
-        this.highlightContents(contents)
-      }
+      this.showContents(contents, lineChanges, contentsChanged, path)
     } catch (e) {
       log.error(`Failed to read ${path} to show it`, e)
 
       if (!this.unmounted && requestId === this.loadRequestId) {
-        this.setState({ contents: null, failed: true })
+        this.setState({ contents: null, contentsPath: null, failed: true })
       }
     }
+  }
+
+  private showContents(
+    contents: IdeFileContents,
+    lineChanges: ILineChanges,
+    contentsChanged: boolean,
+    path: string
+  ) {
+    const { repository } = this.props
+    const draftKey = getDraftKey(repository, path)
+    const draft =
+      this.state.contentsPath === path || this.props.readOnly
+        ? undefined
+        : unsavedDrafts.get(draftKey)
+
+    this.setState(prevState => ({
+      contents,
+      contentsPath: path,
+      lineChanges,
+      failed: false,
+      revision: contentsChanged ? prevState.revision + 1 : prevState.revision,
+      draft: draft?.text ?? null,
+      // The edits of the draft were made to another version of the file
+      changedOnDisk:
+        draft !== undefined &&
+        contents.kind === 'text' &&
+        draft.base !== contents.lines.join('\n'),
+    }))
   }
 
   /** The lines of the file that differ from the committed version. */
@@ -270,42 +342,13 @@ export class IdeFileViewer extends React.Component<
     }
   }
 
-  private async highlightContents(contents: IdeFileContents) {
-    const { path, tabSize } = this.props
-
-    if (
-      path === null ||
-      contents.kind !== 'text' ||
-      !isHighlightable(contents.lines)
-    ) {
-      return
-    }
-
-    const requestId = ++this.highlightRequestId
-    const allLines = contents.lines.map((_, index) => index)
-
-    try {
-      const tokens = await highlight(
-        contents.lines,
-        Path.basename(path),
-        Path.extname(path),
-        tabSize,
-        allLines
-      )
-
-      // Ignore the result if the file changed or was replaced while it ran
-      if (!this.unmounted && requestId === this.highlightRequestId) {
-        this.setState({ tokens })
-      }
-    } catch (e) {
-      // The file is still shown, only without the colors
-      log.error(`Failed to highlight ${path}`, e)
-    }
-  }
-
   private getChange() {
     const { path, changedFiles } = this.props
     return changedFiles.find(file => file.path === path)
+  }
+
+  private getStatus() {
+    return this.props.commit?.status ?? this.getChange()?.status
   }
 
   private getLines() {
@@ -315,199 +358,127 @@ export class IdeFileViewer extends React.Component<
 
   private getChangeStarts = memoizeOne(getChangeGroupStarts)
 
-  private getIndentation = memoizeOne(
-    (lines: ReadonlyArray<string>, tabSize: number) => ({
-      unit: detectIndentUnit(lines, tabSize),
-      columns: getLineIndentation(lines, tabSize),
-    })
+  private getFoldRangeCount = memoizeOne(
+    (lines: ReadonlyArray<string>, tabSize: number) =>
+      getFoldRanges(lines, tabSize).length
   )
 
-  /** The style that draws the indent guides in the indentation of a line. */
-  private getIndentGuidesStyle(
-    columns: number,
-    unit: number
-  ): React.CSSProperties | undefined {
-    if (columns <= 0) {
-      return undefined
+  private getEditorText = memoizeOne((lines: ReadonlyArray<string>) =>
+    lines.join('\n')
+  )
+
+  private onDirtyChange = (isDirty: boolean) => {
+    const { repository, path } = this.props
+
+    if (path !== null && !isDirty) {
+      unsavedDrafts.delete(getDraftKey(repository, path))
     }
 
-    const unitWidth = unit * this.state.characterWidth
-    const guideCount = Math.ceil(columns / unit)
-    const color = 'var(--ide-indent-guide-color)'
-
-    // A 1px line at the start of each level of indentation, from the start of
-    // the text to the end of the indentation.
-    return {
-      backgroundImage: `repeating-linear-gradient(to right, ${color} 0, ${color} 1px, transparent 1px, transparent ${unitWidth}px)`,
-      backgroundSize: `${guideCount * unitWidth}px 100%`,
-      backgroundPosition: `${TextPadding}px 0`,
-      backgroundRepeat: 'no-repeat',
-    }
+    this.setState({ isDirty })
   }
 
-  private getFolding = memoizeOne(
-    (lines: ReadonlyArray<string>, tabSize: number) => {
-      const ranges = getFoldRanges(lines, tabSize)
-      return { ranges, byStart: getFoldRangesByStart(ranges) }
-    }
-  )
+  private onSave = async () => {
+    const { repository, path } = this.props
+    const { contents, isDirty } = this.state
+    const editor = this.editorRef.current
 
-  private getVisible = memoizeOne(
-    (
-      lineCount: number,
-      byStart: ReadonlyMap<number, IFoldRange>,
-      folded: ReadonlyMap<number, string>
-    ) => getVisibleLines(lineCount, byStart, folded)
-  )
-
-  /** The lines of the file with which of them are shown and can be folded. */
-  private getLayout() {
-    const lines = this.getLines()
-
-    if (lines === null) {
-      return null
-    }
-
-    const folding = this.getFolding(lines, this.props.tabSize)
-    const visible = this.getVisible(
-      lines.length,
-      folding.byStart,
-      this.state.folded
-    )
-
-    return { lines, folding, visible }
-  }
-
-  private toggleFold(line: number) {
-    const layout = this.getLayout()
-
-    if (layout === null) {
+    if (
+      path === null ||
+      editor === null ||
+      !isDirty ||
+      contents?.kind !== 'text' ||
+      contents.isDeleted
+    ) {
       return
     }
 
-    this.setState(prevState => {
-      const folded = new Map(prevState.folded)
+    const { lines, generation } = editor.getSnapshot()
 
-      if (folded.has(line)) {
-        folded.delete(line)
-      } else {
-        folded.set(line, layout.lines[line])
+    try {
+      await writeIdeFileLines(repository, path, lines, contents.format)
+    } catch (e) {
+      log.error(`Failed to save ${path}`, e)
+
+      if (!this.unmounted && this.props.path === path) {
+        this.setState({ saveError: `Couldn’t save the file: ${e.message}` })
       }
 
-      return { folded }
-    })
-  }
-
-  private onFoldAll = () => {
-    const layout = this.getLayout()
-
-    if (layout !== null) {
-      this.setState({
-        folded: new Map(
-          layout.folding.ranges.map(range => [
-            range.start,
-            layout.lines[range.start],
-          ])
-        ),
-      })
-    }
-  }
-
-  private onUnfoldAll = () => this.setState({ folded: new Map() })
-
-  /** The line that "next change" and "previous change" go on from. */
-  private getReferenceLine(visible: ReadonlyArray<number>) {
-    const jump = this.lastJump
-
-    // Right after a jump, continue from the change that was jumped to
-    if (jump !== null && Math.abs(this.scrollTop - jump.scrollTop) < 1) {
-      return jump.line
-    }
-
-    const visibleRows = this.viewportHeight / LineHeight
-    const row =
-      Math.floor(this.scrollTop / LineHeight) + Math.floor(visibleRows / 3)
-
-    return visible[Math.min(row, visible.length - 1)] ?? 0
-  }
-
-  /** Scroll so the line is a third of the way down, showing what is above. */
-  private scrollToLine(line: number) {
-    const layout = this.getLayout()
-
-    if (layout === null) {
       return
     }
 
-    const row = getVisibleIndexOfLine(layout.visible, line)
-    const visibleRows = Math.floor(this.viewportHeight / LineHeight)
-    const scrollTop = Math.max(
-      0,
-      (row - Math.floor(visibleRows / 3)) * LineHeight
-    )
+    if (this.unmounted || this.props.path !== path) {
+      return
+    }
 
-    this.lastJump = { line, scrollTop }
-    this.gridRef.current?.scrollToPosition({ scrollLeft: 0, scrollTop })
+    // What was read from the file is what was just written to it
+    this.setState({
+      contents: { ...contents, lines },
+      changedOnDisk: false,
+      saveError: null,
+    })
+    this.editorRef.current?.markSaved(generation)
+    this.scheduleReload()
+  }
+
+  /** Take what is in the file now, and let go of the unsaved edits. */
+  private onReloadFromDisk = () => {
+    const { path } = this.props
+
+    if (this.latest !== null && path !== null) {
+      unsavedDrafts.delete(getDraftKey(this.props.repository, path))
+      this.showContents(
+        this.latest.contents,
+        this.latest.lineChanges,
+        true,
+        path
+      )
+      this.setState({ draft: null, isDirty: false, changedOnDisk: false })
+    }
+  }
+
+  /** Go on with the unsaved edits, they replace the file when saved. */
+  private onKeepEdits = () => {
+    this.setState(prevState => ({
+      changedOnDisk: false,
+      contents: this.latest?.contents ?? prevState.contents,
+    }))
   }
 
   private goToChange(direction: 1 | -1) {
-    const layout = this.getLayout()
+    const lines = this.getLines()
+    const editor = this.editorRef.current
 
-    if (layout === null) {
+    if (lines === null || editor === null) {
       return
     }
 
-    const { lines, folding, visible } = layout
     const starts = this.getChangeStarts(this.state.lineChanges, lines.length)
 
     if (starts.length === 0) {
       return
     }
 
-    const reference = this.getReferenceLine(visible)
+    const reference = editor.getReferenceLine()
     const target =
       direction === 1
         ? starts.find(start => start > reference) ?? starts[0]
         : [...starts].reverse().find(start => start < reference) ??
           starts[starts.length - 1]
 
-    // Open the blocks that hide the change before scrolling to it
-    const folded = unfoldBlocksHiding(
-      this.state.folded,
-      folding.byStart,
-      target
-    )
-
-    if (folded === this.state.folded) {
-      this.scrollToLine(target)
-    } else {
-      this.setState({ folded }, () => this.scrollToLine(target))
-    }
+    editor.revealLine(target)
   }
 
-  /**
-   * The buttons to fold blocks all show while the pointer is over the gutter.
-   * This is a class on the container instead of state so that the lines don't
-   * have to be drawn again every time the pointer moves in or out.
-   */
-  private onLinesMouseOver = (event: React.MouseEvent<HTMLDivElement>) => {
-    const inGutter =
-      event.target instanceof Element &&
-      event.target.closest('.ide-line-number') !== null
+  private onToggleHighlightChanges = () => {
+    const highlightChanges = !this.state.highlightChanges
 
-    this.linesRef.current?.classList.toggle('gutter-hovered', inGutter)
-  }
-
-  private onLinesMouseLeave = () => {
-    this.linesRef.current?.classList.remove('gutter-hovered')
+    setBoolean(HighlightChangesKey, highlightChanges)
+    this.setState({ highlightChanges })
   }
 
   private onPreviousChange = () => this.goToChange(-1)
   private onNextChange = () => this.goToChange(1)
-
-  private onGridScroll = ({ scrollTop }: { readonly scrollTop: number }) => {
-    this.scrollTop = scrollTop
-  }
+  private onFoldAll = () => this.editorRef.current?.foldAll()
+  private onUnfoldAll = () => this.editorRef.current?.unfoldAll()
 
   private renderChangeNavigation() {
     const lines = this.getLines()
@@ -537,14 +508,26 @@ export class IdeFileViewer extends React.Component<
         >
           <Octicon symbol={octicons.arrowDown} />
         </Button>
+        <Button
+          className="ide-file-viewer-header-button"
+          onClick={this.onToggleHighlightChanges}
+          ariaPressed={this.state.highlightChanges}
+          tooltip="Highlight changed lines"
+          ariaLabel="Highlight changed lines"
+        >
+          <Octicon symbol={octicons.paintbrush} />
+        </Button>
       </div>
     )
   }
 
   private renderFoldButtons() {
-    const layout = this.getLayout()
+    const lines = this.getLines()
 
-    if (layout === null || layout.folding.ranges.length === 0) {
+    if (
+      lines === null ||
+      this.getFoldRangeCount(lines, this.props.tabSize) === 0
+    ) {
       return null
     }
 
@@ -571,7 +554,8 @@ export class IdeFileViewer extends React.Component<
   }
 
   private renderHeader(path: string) {
-    const change = this.getChange()
+    const status = this.getStatus()
+    const { isDirty } = this.state
 
     return (
       <div className="header">
@@ -579,17 +563,32 @@ export class IdeFileViewer extends React.Component<
         <span className="ide-file-viewer-path">
           <PathText path={path} />
         </span>
+        {isDirty && (
+          <>
+            <Octicon
+              symbol={octicons.dotFill}
+              className="ide-file-viewer-unsaved"
+              title="This file has changes that aren’t saved"
+            />
+            <Button
+              className="ide-file-viewer-save"
+              onClick={this.onSave}
+              tooltip="Save (Ctrl+S)"
+            >
+              Save
+            </Button>
+          </>
+        )}
         {this.renderChangeNavigation()}
         {this.renderFoldButtons()}
-        {change !== undefined && (
+        {status !== undefined && (
           <Octicon
-            symbol={iconForStatus(change.status)}
-            className={
-              'status status-' + mapStatus(change.status).toLowerCase()
-            }
-            title={mapStatus(change.status)}
+            symbol={iconForStatus(status)}
+            className={'status status-' + mapStatus(status).toLowerCase()}
+            title={mapStatus(status)}
           />
         )}
+        {this.props.headerExtras}
       </div>
     )
   }
@@ -598,195 +597,93 @@ export class IdeFileViewer extends React.Component<
     return <div className="ide-file-viewer-message">{message}</div>
   }
 
-  private renderLines(
-    lines: ReadonlyArray<string>,
-    isDeleted: boolean
-  ): JSX.Element {
-    if (lines.length === 0) {
-      return this.renderMessage('This file is empty.')
-    }
+  private renderBanners(isDeleted: boolean) {
+    const { changedOnDisk, saveError } = this.state
 
     return (
       <>
         {isDeleted && (
           <div className="ide-file-viewer-banner">
-            This file was deleted. Showing the last committed version.
+            {this.props.commit === undefined
+              ? 'This file was deleted. Showing the last committed version.'
+              : 'This file was deleted in this commit. Showing the version before it.'}
           </div>
         )}
-        <div
-          className="ide-file-viewer-lines cm-s-default"
-          ref={this.linesRef}
-          onMouseOver={this.onLinesMouseOver}
-          onMouseLeave={this.onLinesMouseLeave}
-        >
-          <AutoSizer>
-            {({ width, height }) => this.renderGrid(lines, width, height)}
-          </AutoSizer>
+        {changedOnDisk && (
+          <div className="ide-file-viewer-banner">
+            <span className="ide-file-viewer-banner-text">
+              This file changed on disk while you have changes that aren’t
+              saved.
+            </span>
+            <Button
+              className="ide-file-viewer-banner-button"
+              onClick={this.onReloadFromDisk}
+            >
+              Reload and discard my changes
+            </Button>
+            <Button
+              className="ide-file-viewer-banner-button"
+              onClick={this.onKeepEdits}
+            >
+              Keep my changes
+            </Button>
+          </div>
+        )}
+        {saveError !== null && (
+          <div className="ide-file-viewer-banner ide-file-viewer-error">
+            {saveError}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  private renderEditor(
+    path: string,
+    lines: ReadonlyArray<string>,
+    isDeleted: boolean
+  ): JSX.Element {
+    const { tabSize } = this.props
+    const { revision, draft, lineChanges } = this.state
+
+    return (
+      <>
+        {this.renderBanners(isDeleted)}
+        <div className="ide-file-viewer-lines">
+          <IdeCodeEditor
+            key={path}
+            ref={this.editorRef}
+            path={path}
+            text={this.getEditorText(lines)}
+            revision={revision}
+            draft={draft}
+            tabSize={tabSize}
+            highlight={isHighlightable(lines)}
+            readOnly={isDeleted || this.props.readOnly === true}
+            highlightChanges={this.state.highlightChanges}
+            lineChanges={lineChanges}
+            onDirtyChange={this.onDirtyChange}
+            onSave={this.onSave}
+          />
         </div>
       </>
     )
   }
 
-  private getGutterWidth(lineCount: number) {
-    return (
-      lineCount.toString().length * this.state.characterWidth +
-      GutterPadding +
-      FoldColumnWidth +
-      GutterPadding / 2
-    )
-  }
-
-  private renderGrid(
-    lines: ReadonlyArray<string>,
-    width: number,
-    height: number
-  ) {
-    const layout = this.getLayout()
-
-    if (layout === null) {
-      return null
-    }
-
-    const { visible } = layout
-    const { characterWidth } = this.state
-    this.viewportHeight = height
-    const gutterWidth = this.getGutterWidth(lines.length)
-    const longestLine = getLongestLineLength(lines, this.props.tabSize)
-    const contentWidth =
-      gutterWidth +
-      GutterPadding +
-      (longestLine + TrailingColumns) * characterWidth
-
-    return (
-      <Grid
-        ref={this.gridRef}
-        onScroll={this.onGridScroll}
-        width={width}
-        height={height}
-        columnCount={1}
-        columnWidth={Math.max(width, contentWidth)}
-        rowCount={visible.length}
-        rowHeight={LineHeight}
-        overscanRowCount={20}
-        // The grid hides what overflows its inner container by default, which
-        // keeps the line numbers from sticking to the left when scrolling.
-        containerStyle={{ overflow: 'visible' }}
-        cellRenderer={(cell: GridCellProps) =>
-          this.renderLine(cell, layout, gutterWidth)
-        }
-        // Makes the grid render the lines again when they change
-        lines={lines}
-        visible={visible}
-        tokens={this.state.tokens}
-        lineChanges={this.state.lineChanges}
-        tabSize={this.props.tabSize}
-        characterWidth={characterWidth}
-        aria-label="File contents"
-        tabIndex={0}
-      />
-    )
-  }
-
-  /** Whether any of the lines of a folded block have changes. */
-  private hasChangesIn(range: IFoldRange) {
-    const { added, modified, removedBefore } = this.state.lineChanges
-
-    for (let line = range.start + 1; line <= range.end; line++) {
-      if (added.has(line) || modified.has(line) || removedBefore.has(line)) {
-        return true
-      }
-    }
-
-    return false
-  }
-
-  private renderLine(
-    { key, rowIndex, style }: GridCellProps,
-    layout: NonNullable<ReturnType<IdeFileViewer['getLayout']>>,
-    gutterWidth: number
-  ) {
-    const { lines, folding, visible } = layout
-    const line = visible[rowIndex]
-    const range = folding.byStart.get(line)
-    const isFolded = range !== undefined && this.state.folded.has(line)
-
-    const { added, modified, removedBefore } = this.state.lineChanges
-    const isLast = line === lines.length - 1
-    const indentation = this.getIndentation(lines, this.props.tabSize)
-
-    // A folded block with changes in it shows them on the line it starts on
-    const hasHiddenChanges =
-      isFolded && range !== undefined && this.hasChangesIn(range)
-
-    const numberClassName = classNames('ide-line-number', {
-      'change-added': added.has(line),
-      'change-modified': modified.has(line) || hasHiddenChanges,
-      'change-removed-before': removedBefore.has(line),
-      'change-removed-after': isLast && removedBefore.has(lines.length),
-    })
-
-    return (
-      <div key={key} style={style} className="ide-line">
-        <span className={numberClassName} style={{ width: gutterWidth }}>
-          <span className="ide-line-number-text">{line + 1}</span>
-          <span className="ide-line-fold-column">
-            {range !== undefined && (
-              <span
-                className={classNames('ide-line-fold', { folded: isFolded })}
-                role="button"
-                aria-label={isFolded ? 'Unfold block' : 'Fold block'}
-                aria-expanded={!isFolded}
-                onClick={() => this.toggleFold(line)}
-              >
-                <Octicon
-                  symbol={
-                    isFolded ? octicons.chevronRight : octicons.chevronDown
-                  }
-                />
-              </span>
-            )}
-          </span>
-        </span>
-        <span
-          className="ide-line-text"
-          style={this.getIndentGuidesStyle(
-            indentation.columns[line],
-            indentation.unit
-          )}
-        >
-          {this.renderLineText(lines[line], this.state.tokens?.[line])}
-          {isFolded && range !== undefined && (
-            <span
-              className="ide-fold-ellipsis"
-              title={`${range.end - range.start} lines are folded`}
-              onClick={() => this.toggleFold(line)}
-            >
-              …
-            </span>
-          )}
-        </span>
-      </div>
-    )
-  }
-
-  private renderLineText(line: string, tokens: ITokens[number] | undefined) {
-    return tokens === undefined ? line : syntaxHighlightLine(line, [tokens])
-  }
-
-  private renderBody(): JSX.Element | null {
-    const { contents, failed } = this.state
+  private renderBody(path: string): JSX.Element | null {
+    const { contents, contentsPath, failed } = this.state
 
     if (failed) {
       return this.renderMessage('Couldn’t read this file.')
     }
 
-    if (contents === null) {
+    if (contents === null || contentsPath !== path) {
       return null
     }
 
     switch (contents.kind) {
       case 'text':
-        return this.renderLines(contents.lines, contents.isDeleted)
+        return this.renderEditor(path, contents.lines, contents.isDeleted)
       case 'binary':
         return this.renderMessage('This is a binary file, it can’t be shown.')
       case 'too-large':
@@ -816,17 +713,16 @@ export class IdeFileViewer extends React.Component<
     return (
       <div className="diff-container ide-file-viewer">
         {this.renderHeader(path)}
-        {this.renderBody()}
-        <span
-          className="ide-file-viewer-measure"
-          ref={this.measureRef}
-          aria-hidden={true}
-        >
-          {MeasureSample}
-        </span>
+        {this.renderBody(path)}
       </div>
     )
   }
+}
+
+function getLineChangesOfDiff(diff: IDiff | null): ILineChanges {
+  return diff?.kind === DiffType.Text
+    ? getLineChanges(diff.hunks)
+    : NoLineChanges
 }
 
 function isSameContents(a: IdeFileContents | null, b: IdeFileContents) {
@@ -845,25 +741,4 @@ function isSameContents(a: IdeFileContents | null, b: IdeFileContents) {
   return a.kind === 'too-large' && b.kind === 'too-large'
     ? a.size === b.size
     : true
-}
-
-/** The length of the longest line in characters, with tabs expanded. */
-export function getLongestLineLength(
-  lines: ReadonlyArray<string>,
-  tabSize: number
-) {
-  let longest = 0
-
-  for (const line of lines) {
-    let length = line.length
-
-    // Tabs are shown as `tabSize` characters wide, at most
-    for (let i = line.indexOf('\t'); i !== -1; i = line.indexOf('\t', i + 1)) {
-      length += tabSize - 1
-    }
-
-    longest = Math.max(longest, length)
-  }
-
-  return longest
 }

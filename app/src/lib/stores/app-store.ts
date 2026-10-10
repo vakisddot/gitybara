@@ -374,6 +374,9 @@ import {
 } from '../../ui/lib/diff-mode'
 import {
   abortCherryPick,
+  ShowFullFileDiffDefault,
+  getShowFullFileDiff,
+  setShowFullFileDiff,
   cherryPick,
   CherryPickResult,
   continueCherryPick,
@@ -688,6 +691,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
   private uncommittedChangesStrategy = defaultUncommittedChangesStrategy
 
+  private showFullFileDiff: boolean = ShowFullFileDiffDefault
   private selectedExternalEditor: string | null = null
 
   private resolvedExternalEditor: string | null = null
@@ -1316,6 +1320,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       selectedShell: this.selectedShell,
       repositoryFilterText: this.repositoryFilterText,
       resolvedExternalEditor: this.resolvedExternalEditor,
+      showFullFileDiff: this.showFullFileDiff,
       selectedCloneRepositoryTab: this.selectedCloneRepositoryTab,
       selectedBranchesTab: this.selectedBranchesTab,
       selectedTheme: this.selectedTheme,
@@ -2644,6 +2649,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     this.alwaysUseCopilotForConflictResolution = getBoolean(
+    this.showFullFileDiff = getShowFullFileDiff()
       alwaysUseCopilotForConflictResolutionKey,
       false
     )
@@ -8059,6 +8065,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
   public _beginEnterpriseSignIn(
     resultCallback?: (result: SignInResult) => void
   ) {
+  public _setShowFullFileDiff(showFullFileDiff: boolean) {
+    if (showFullFileDiff !== this.showFullFileDiff) {
+      setShowFullFileDiff(showFullFileDiff)
+      this.showFullFileDiff = showFullFileDiff
+      this.emitUpdate()
+    }
+  }
+
     return this.signInStore.beginEnterpriseSignIn(resultCallback)
   }
 

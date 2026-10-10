@@ -49,6 +49,10 @@ interface IChangesProps {
    */
   readonly showSideBySideDiff: boolean
 
+  /** Whether the whole file is shown instead of the diff, and how to change it */
+  readonly showFullFile: boolean
+  readonly onShowFullFileChanged: (showFullFile: boolean) => void
+
   /** Whether or not to show the diff check marks indicating inclusion in a commit */
   readonly showDiffCheckMarks: boolean
 
@@ -108,6 +112,8 @@ export class Changes extends React.Component<IChangesProps, {}> {
           diff={this.props.diff}
           showSideBySideDiff={this.props.showSideBySideDiff}
           onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
+          showFullFile={this.props.showFullFile}
+          onShowFullFileChanged={this.props.onShowFullFileChanged}
           hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}
           onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
           onDiffOptionsOpened={this.props.onDiffOptionsOpened}

@@ -25,6 +25,10 @@ interface IDiffHeaderProps {
 
   /** Called when the user opens the diff options popover */
   readonly onDiffOptionsOpened: () => void
+
+  /** Whether the whole file is shown and the way to change that, if offered. */
+  readonly showFullFile?: boolean
+  readonly onShowFullFileChanged?: (showFullFile: boolean) => void
 }
 
 /** Displays information about a file */
@@ -62,6 +66,8 @@ export class DiffHeader extends React.Component<IDiffHeaderProps, {}> {
         hideWhitespaceChanges={this.props.hideWhitespaceInDiff}
         onShowSideBySideDiffChanged={this.props.onShowSideBySideDiffChanged}
         showSideBySideDiff={this.props.showSideBySideDiff}
+        showFullFile={this.props.showFullFile}
+        onShowFullFileChanged={this.props.onShowFullFileChanged}
         onDiffOptionsOpened={this.props.onDiffOptionsOpened}
       />
     )

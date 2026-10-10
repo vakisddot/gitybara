@@ -41,101 +41,175 @@
   }
 
   .ide-file-viewer-banner {
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
+    gap: var(--spacing-half);
     padding: var(--spacing-half) var(--spacing);
     color: var(--text-color);
     background: var(--file-warning-background-color);
     border-bottom: 1px solid var(--file-warning-border-color);
-  }
 
-  .ide-file-viewer-lines {
-    flex: 1;
-    min-height: 0;
+    .ide-file-viewer-banner-text {
+      flex: 1 1 auto;
+    }
 
-    font-family: var(--font-family-monospace);
-    font-size: var(--font-size-sm);
-    color: var(--diff-text-color);
-
-    .ReactVirtualized__Grid:focus {
-      outline: none;
+    .ide-file-viewer-banner-button {
+      flex-shrink: 0;
     }
   }
 
-  .ide-line {
-    // Keep the width set by the grid, the line is as wide as the longest one
-    // and the line number sticks to the left while scrolling sideways.
-    display: flex;
-    line-height: 20px;
-    white-space: pre;
+  .ide-file-viewer-error {
+    background: var(--error-color);
+    color: var(--text-color);
   }
 
-  .ide-line-number {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    flex-shrink: 0;
+  .ide-file-viewer-unsaved {
     display: flex;
-    align-items: center;
-    box-sizing: border-box;
-    user-select: none;
-    color: var(--diff-line-number-color);
-    background: var(--diff-gutter-background-color);
-    border-right: 1px solid var(--diff-border-color);
+    flex-shrink: 0;
+    margin-right: var(--spacing-half);
+    color: var(--color-modified);
+  }
+
+  .ide-file-viewer-save {
+    flex-shrink: 0;
+    height: 22px;
+    margin-right: var(--spacing-half);
+    padding: 0 var(--spacing);
+  }
+
+  // The editor fills what is left of the viewer, CodeMirror sizes itself to it
+  .ide-file-viewer-lines {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+
+    .ide-code-editor {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+
+    .CodeMirror {
+      height: 100%;
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-sm);
+      color: var(--diff-text-color);
+      background: transparent;
+    }
+
+    .CodeMirror-cursor {
+      border-left-color: var(--text-color);
+    }
+
+    // The line height is also what the guides and the gutter are drawn for
+    .CodeMirror pre.CodeMirror-line,
+    .CodeMirror pre.CodeMirror-line-like {
+      padding: 0 12px;
+      line-height: 20px;
+    }
+
+    .CodeMirror-gutters {
+      background: var(--diff-gutter-background-color);
+      border-right: 1px solid var(--diff-border-color);
+    }
+
+    .CodeMirror-linenumber {
+      min-width: 0;
+      padding: 0 8px 0 12px;
+      color: var(--diff-line-number-color);
+      line-height: 20px;
+    }
   }
 
   // Marks the lines that differ from the committed version, in the colors the
   // changed files use: a bar for added and modified lines and a triangle where
   // lines were removed.
-  .ide-line-number {
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      width: 3px;
+  .CodeMirror-gutter-background {
+    &.change-added {
+      box-shadow: inset 3px 0 0 var(--color-new);
     }
 
-    &.change-added::before {
-      background: var(--color-new);
+    &.change-modified {
+      box-shadow: inset 3px 0 0 var(--color-modified);
     }
 
-    &.change-modified::before {
-      background: var(--color-modified);
+    &.change-removed-before {
+      background: linear-gradient(135deg, var(--color-deleted) 50%, transparent 50%) no-repeat 0 0 / 8px 8px;
     }
 
-    &.change-removed-before::after,
-    &.change-removed-after::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      border: 4px solid transparent;
-      border-left-color: var(--color-deleted);
-    }
-
-    &.change-removed-before::after {
-      top: -4px;
-    }
-
-    &.change-removed-after::after {
-      bottom: -4px;
+    &.change-removed-after {
+      background: linear-gradient(45deg, var(--color-deleted) 50%, transparent 50%) no-repeat 0 100% / 8px 8px;
     }
   }
 
-  .ide-line-number-text {
-    flex: 1;
-    text-align: right;
-    padding-right: 2px;
+  // The background of the lines that have changes, when it's asked for. New
+  // lines have the color the diffs use for them, and the lines that replace
+  // others have the same kind of color in yellow.
+  .CodeMirror-linebackground {
+    &.change-added-line {
+      background: var(--diff-add-background-color);
+    }
+
+    &.change-modified-line {
+      background: var(--ide-modified-line-background);
+    }
+
+    // Where lines were removed there is nothing to color, so there is a line
+    &.change-removed-before-line {
+      box-shadow: inset 0 2px 0 var(--color-deleted);
+    }
+
+    &.change-removed-after-line {
+      box-shadow: inset 0 -2px 0 var(--color-deleted);
+    }
+  }
+
+  // Marks over the scroll bar for where the changes are, like an overview ruler
+  .ide-change-ruler {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    pointer-events: none;
+    z-index: 7;
+
+    .ide-change-mark {
+      position: absolute;
+      right: 3px;
+      width: 6px;
+      min-height: 3px;
+      border-radius: 1px;
+      opacity: 0.85;
+
+      &.added {
+        background: var(--color-new);
+      }
+
+      &.modified {
+        background: var(--color-modified);
+      }
+
+      // Lines were removed here, so there is no line to cover
+      &.removed {
+        height: 0;
+        min-height: 0;
+        border-top: 3px solid var(--color-deleted);
+        border-radius: 0;
+      }
+    }
   }
 
   // The button to fold a block, shown while the pointer is over the gutter and
   // always for a block that is folded.
-  .ide-line-fold-column {
-    flex: 0 0 16px;
+  .ide-fold-gutter {
     width: 16px;
   }
 
-  .ide-line-fold {
+  .ide-fold-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,33 +219,31 @@
     opacity: 0;
     color: var(--text-secondary-color);
 
-    // The icon doesn't take the pointer, so the whole button does, with its
-    // pointer cursor, instead of the icon having its own default cursor.
-    .octicon {
-      width: 12px;
-      height: 12px;
-      pointer-events: none;
+    // A chevron that points down, or to the right when the block is folded
+    &::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: translateY(-1px) rotate(45deg);
+    }
+
+    &.folded {
+      opacity: 1;
+
+      &::before {
+        transform: translateX(-1px) rotate(-45deg);
+      }
     }
 
     &:hover {
       color: var(--text-color);
     }
-
-    &.folded {
-      opacity: 1;
-    }
   }
 
-  .ide-file-viewer-lines.gutter-hovered .ide-line-fold {
+  .ide-code-editor.gutter-hovered .ide-fold-indicator {
     opacity: 1;
-  }
-
-  .ide-line-text {
-    // Fill the rest of the line, so the indent guides of an empty line aren't
-    // cut off where its text ends.
-    flex: 1 1 auto;
-    padding-left: 12px;
-    user-select: text;
   }
 
   // Shown after a line that starts a folded block
@@ -187,14 +259,5 @@
     &:hover {
       color: var(--text-color);
     }
-  }
-
-  // Not shown, only used to measure how wide a character is
-  .ide-file-viewer-measure {
-    position: absolute;
-    visibility: hidden;
-    white-space: pre;
-    font-family: var(--font-family-monospace);
-    font-size: var(--font-size-sm);
   }
 }
