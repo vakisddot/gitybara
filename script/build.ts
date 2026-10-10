@@ -325,7 +325,9 @@ function moveAnalysisFiles() {
 }
 
 function copyDependencies() {
-  const pkg: Package = require(path.join(projectRoot, 'app', 'package.json'))
+  const pkg: Package = {
+    ...require(path.join(projectRoot, 'app', 'package.json')),
+  }
 
   const filterExternals = (dependencies: Record<string, string>) =>
     Object.fromEntries(

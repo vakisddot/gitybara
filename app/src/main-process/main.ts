@@ -118,10 +118,9 @@ if (__DARWIN__) {
   possibleProtocols.add('github-windows')
 }
 
-// On Windows, in order to get notifications properly working for dev builds,
-// we'll want to set the right App User Model ID from production builds.
-if (__WIN32__ && __DEV__) {
-  app.setAppUserModelId('com.squirrel.GitHubDesktop.GitHubDesktop')
+// Match the Squirrel identity so taskbar grouping and notifications use Gitybara.
+if (__WIN32__) {
+  app.setAppUserModelId('com.squirrel.Gitybara.Gitybara')
 }
 
 app.on('window-all-closed', () => {

@@ -5,6 +5,7 @@ import merge from 'webpack-merge'
 import { getReplacements } from './app-info'
 import { getDistArchitecture } from '../script/dist-info'
 import { getKoffiWebpackConfig } from '../script/webpack-koffi'
+import { productName } from './package.json'
 
 export const externals = ['7zip']
 
@@ -91,6 +92,7 @@ export const renderer = merge(
     },
     plugins: [
       new HtmlWebpackPlugin({
+        title: productName,
         template: path.join(__dirname, 'static', 'index.html'),
         chunks: ['renderer'],
       }),
@@ -124,7 +126,7 @@ export const crash = merge({}, commonConfig, {
   target: 'electron-renderer',
   plugins: [
     new HtmlWebpackPlugin({
-      title: 'GitHub Desktop',
+      title: productName,
       filename: 'crash.html',
       chunks: ['crash'],
     }),

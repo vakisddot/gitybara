@@ -5,8 +5,7 @@ import { Form } from './form'
 import { Button } from './button'
 
 /** Text to let the user know their browser will send them back to GH Desktop */
-export const BrowserRedirectMessage =
-  "Your browser will redirect you back to GitHub Desktop once you've signed in. If your browser asks for your permission to launch GitHub Desktop please allow it to."
+export const BrowserRedirectMessage = `Your browser will redirect you back to ${__APP_NAME__} once you've signed in. If your browser asks for your permission to launch ${__APP_NAME__} please allow it to.`
 
 interface IAuthenticationFormProps {
   /**
