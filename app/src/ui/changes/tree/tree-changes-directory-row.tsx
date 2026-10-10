@@ -17,6 +17,12 @@ interface ITreeChangesDirectoryRowProps {
   readonly row: IChangesTreeDirectoryRow
   readonly matches: ReadonlyArray<number>
   readonly availableWidth: number
+
+  /** An icon to show for the directory, after the chevron. */
+  readonly icon?: JSX.Element
+
+  /** The width the icon takes up, including the space after it. */
+  readonly iconWidth?: number
   readonly onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   readonly onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void
   readonly onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void
@@ -30,7 +36,8 @@ function getTreeDirectoryRowStyle(depth: number): React.CSSProperties {
 
 function getTreeDirectoryNameAvailableWidth(
   row: IChangesTreeDirectoryRow,
-  availableWidth: number
+  availableWidth: number,
+  iconWidth: number
 ) {
   const indentation = row.depth * TreeIndent
   const countWidth =
@@ -42,6 +49,7 @@ function getTreeDirectoryNameAvailableWidth(
     indentation -
     TreeDirectoryChevronWidth -
     TreeDirectoryChevronMarginRight -
+    iconWidth -
     TreeDirectoryCountPadding -
     countWidth
   )
@@ -66,8 +74,16 @@ export function TreeGuideLines({ depth }: { readonly depth: number }) {
 }
 
 export function TreeChangesDirectoryRow(props: ITreeChangesDirectoryRowProps) {
-  const { row, matches, availableWidth, onClick, onKeyDown, onContextMenu } =
-    props
+  const {
+    row,
+    matches,
+    availableWidth,
+    icon,
+    iconWidth = 0,
+    onClick,
+    onKeyDown,
+    onContextMenu,
+  } = props
   const countLabel = `${row.fileCount} changed file${
     row.fileCount === 1 ? '' : 's'
   }`
@@ -75,7 +91,8 @@ export function TreeChangesDirectoryRow(props: ITreeChangesDirectoryRowProps) {
     matches.length > 0 ? { title: matches, subtitle: [] } : undefined
   const availableNameWidth = getTreeDirectoryNameAvailableWidth(
     row,
-    availableWidth
+    availableWidth,
+    icon === undefined ? 0 : iconWidth
   )
 
   return (
@@ -95,6 +112,7 @@ export function TreeChangesDirectoryRow(props: ITreeChangesDirectoryRowProps) {
         className="changes-tree-chevron"
         symbol={row.expanded ? octicons.chevronDown : octicons.chevronRight}
       />
+      {icon}
       <span className="changes-tree-directory-name">
         <PathText
           path={row.name}

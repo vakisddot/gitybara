@@ -1,3 +1,11 @@
+// Icons of files and folders in the IDE view, see ide-icon.tsx
+.ide-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+}
+
 // The read-only file viewer shown next to the IDE view of the changes list
 .ide-file-viewer {
   background: var(--background-color);

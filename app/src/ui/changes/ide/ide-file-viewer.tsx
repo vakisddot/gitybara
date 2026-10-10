@@ -8,6 +8,8 @@ import { formatBytes } from '../../lib/bytes'
 import { PathText } from '../../lib/path-text'
 import { Octicon, iconForStatus } from '../../octicons'
 import { IdeFileContents, readIdeFileContents } from './ide-file-contents'
+import { getFileIconName } from './ide-file-icons'
+import { IdeIcon } from './ide-icon'
 
 /** The height of a line in pixels, keep in sync with the styles. */
 const LineHeight = 20
@@ -146,6 +148,7 @@ export class IdeFileViewer extends React.Component<
 
     return (
       <div className="header">
+        <IdeIcon name={getFileIconName(path)} />
         <span className="ide-file-viewer-path">
           <PathText path={path} />
         </span>

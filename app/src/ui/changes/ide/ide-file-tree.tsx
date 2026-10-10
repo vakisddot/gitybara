@@ -24,6 +24,8 @@ import {
   TreeIndent,
 } from '../tree/tree-changes-directory-row'
 import { getDisplayStatus } from '../changed-file'
+import { getFileIconName, getFolderIconName } from './ide-file-icons'
+import { IdeIcon, IdeIconSpace } from './ide-icon'
 import {
   getChangedFileCountByDirectory,
   getCollapsedIdeDirectoryIds,
@@ -326,6 +328,8 @@ export class IdeFileTree extends React.Component<
         row={{ ...row, fileCount: changedFileCount ?? 0 }}
         matches={NoMatches}
         availableWidth={this.props.availableWidth}
+        icon={<IdeIcon name={getFolderIconName(row.path, row.expanded)} />}
+        iconWidth={IdeIconSpace}
         onClick={this.onDirectoryRowClick}
         onKeyDown={this.onDirectoryRowKeyDown}
         onContextMenu={this.onDirectoryRowContextMenu}
@@ -344,6 +348,7 @@ export class IdeFileTree extends React.Component<
       this.props.availableWidth -
       listItemPadding -
       indentation -
+      IdeIconSpace -
       filePadding -
       statusWidth
 
@@ -353,6 +358,7 @@ export class IdeFileTree extends React.Component<
           className="file ide-file"
           style={{ paddingLeft: `calc(var(--spacing) + ${indentation}px)` }}
         >
+          <IdeIcon name={getFileIconName(path)} />
           <PathText path={displayPath} availableWidth={availablePathWidth} />
         </div>
       )
@@ -365,6 +371,7 @@ export class IdeFileTree extends React.Component<
         className="file ide-file"
         style={{ paddingLeft: `calc(var(--spacing) + ${indentation}px)` }}
       >
+        <IdeIcon name={getFileIconName(path)} />
         <PathLabel
           path={displayPath}
           status={getDisplayStatus(change.status, path, displayPath)}
