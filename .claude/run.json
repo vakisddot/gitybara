@@ -1,0 +1,13 @@
+{
+  "profiles": [
+    {
+      "name": "Dev",
+      "run": ["node", "vendor/yarn-1.21.1.js", "start"]
+    },
+    {
+      "name": "Rebuild",
+      "build": ["node", "vendor/yarn-1.21.1.js", "build:dev"],
+      "run": ["node", "vendor/yarn-1.21.1.js", "start"]
+    }
+  ]
+}
