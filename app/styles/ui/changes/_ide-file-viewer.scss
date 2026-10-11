@@ -142,6 +142,14 @@
       border-left-color: var(--text-color);
     }
 
+    // CodeMirror's stylesheet colors the active line a fixed light blue, which
+    // is glaring in the dark themes and hides the text that is dimmed. A tint
+    // of the text color suits every theme, and being see-through it leaves the
+    // colors of the changed lines visible.
+    .CodeMirror-activeline-background {
+      background: color-mix(in srgb, var(--text-color) 8%, transparent);
+    }
+
     // The line height is also what the guides and the gutter are drawn for
     .CodeMirror pre.CodeMirror-line,
     .CodeMirror pre.CodeMirror-line-like {
