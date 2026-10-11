@@ -4,6 +4,10 @@ import * as React from 'react'
 
 import { FileList } from '../../../src/ui/history/file-list'
 import {
+  getFileIconName,
+  getFolderIconName,
+} from '../../../src/ui/changes/ide/ide-file-icons'
+import {
   AppFileStatusKind,
   CommittedFileChange,
 } from '../../../src/models/status'
@@ -149,6 +153,24 @@ describe('History file list', () => {
     fireEvent.keyDown(folder, { key: 'ArrowRight' })
     assert.equal(folder.getAttribute('aria-expanded'), 'true')
     assert.deepStrictEqual(selected, [])
+  })
+
+  it('shows icons for files and folders in the tree but not in the flat list', async () => {
+    const props = createProps()
+    const view = render(<FileList {...props} />)
+    const folder = await screen.findByRole('button', {
+      name: 'src, 2 changed files',
+    })
+    const file = screen.getByRole('option', { name: 'src/a.ts Modified' })
+
+    const iconOf = (element: Element) =>
+      element.querySelector<HTMLImageElement>('img.ide-icon')?.src ?? ''
+    assert.ok(iconOf(folder).endsWith(`${getFolderIconName('src', true)}.svg`))
+    assert.ok(iconOf(file).endsWith(`${getFileIconName('src/a.ts')}.svg`))
+
+    view.rerender(<FileList {...props} showTree={false} />)
+    await waitFor(() => assert.equal(screen.getAllByRole('option').length, 4))
+    assert.equal(view.container.querySelectorAll('img.ide-icon').length, 0)
   })
 
   it('keeps file selection and flat ordering when switching layouts', async () => {

@@ -14,6 +14,12 @@ interface ICommittedFileItemProps {
   readonly focused: boolean
   readonly displayPath?: string
   readonly indentation?: number
+
+  /** An icon to show before the path of the file. */
+  readonly icon?: JSX.Element
+
+  /** The width the icon takes up, including the space after it. */
+  readonly iconWidth?: number
 }
 
 export class CommittedFileItem extends React.Component<ICommittedFileItemProps> {
@@ -23,6 +29,8 @@ export class CommittedFileItem extends React.Component<ICommittedFileItemProps> 
       focused,
       displayPath = file.path,
       indentation = 0,
+      icon,
+      iconWidth = 0,
     } = this.props
     const { status } = file
     const fileStatus = mapStatus(status)
@@ -33,6 +41,7 @@ export class CommittedFileItem extends React.Component<ICommittedFileItemProps> 
     const availablePathWidth =
       this.props.availableWidth -
       indentation -
+      (icon === undefined ? 0 : iconWidth) -
       listItemPadding -
       filePathPadding -
       statusWidth
@@ -46,6 +55,7 @@ export class CommittedFileItem extends React.Component<ICommittedFileItemProps> 
             : undefined
         }
       >
+        {icon}
         <PathLabel
           path={displayPath}
           status={getDisplayStatus(status, file.path, displayPath)}

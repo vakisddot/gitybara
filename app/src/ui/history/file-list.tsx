@@ -21,6 +21,11 @@ import {
   pruneCollapsedTreeDirectoryIds,
   toggleCollapsedTreeDirectoryId,
 } from '../changes/tree/tree-changes-state'
+import {
+  getFileIconName,
+  getFolderIconName,
+} from '../changes/ide/ide-file-icons'
+import { IdeIcon, IdeIconSpace } from '../changes/ide/ide-icon'
 
 interface IFileListProps {
   readonly files: ReadonlyArray<CommittedFileChange>
@@ -126,12 +131,17 @@ export class FileList extends React.Component<IFileListProps, IFileListState> {
           row={item}
           matches={[]}
           availableWidth={this.props.availableWidth}
+          icon={<IdeIcon name={getFolderIconName(item.path, item.expanded)} />}
+          iconWidth={IdeIconSpace}
           onClick={this.onDirectoryClick}
           onKeyDown={this.onDirectoryKeyDown}
           onContextMenu={this.onDirectoryContextMenu}
         />
       )
     }
+
+    // Icons go with the tree, the flat list is kept as plain paths
+    const showTree = this.props.showTree === true
 
     const file = (
       <CommittedFileItem
@@ -140,10 +150,16 @@ export class FileList extends React.Component<IFileListProps, IFileListState> {
         indentation={item.depth * TreeIndent}
         availableWidth={this.props.availableWidth}
         focused={this.state.focusedRow === row}
+        icon={
+          showTree ? (
+            <IdeIcon name={getFileIconName(item.item.path)} />
+          ) : undefined
+        }
+        iconWidth={IdeIconSpace}
       />
     )
 
-    if (!this.props.showTree) {
+    if (!showTree) {
       return file
     }
 
