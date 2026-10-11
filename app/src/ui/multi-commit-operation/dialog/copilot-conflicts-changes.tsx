@@ -252,7 +252,11 @@ export class CopilotConflictsChanges extends React.Component<
       .slice(0, MaxDiffExpansionNewContentLength)
       .split(/\r?\n/)
 
-    return { file, oldContents, newContents, canBeExpanded }
+    const isTruncated =
+      !canBeExpanded ||
+      result.oldContents.length > MaxDiffExpansionNewContentLength
+
+    return { file, oldContents, newContents, canBeExpanded, isTruncated }
   }
 
   private onSelectedFileChanged = (file: CommittedFileChange) => {

@@ -1,4 +1,6 @@
 import * as React from 'react'
+import * as Path from 'path'
+import memoize from 'memoize-one'
 
 import { assertNever } from '../../lib/fatal-error'
 import { encodePathAsUrl } from '../../lib/path'
@@ -18,10 +20,12 @@ import {
   IImageDiff,
   ITextDiff,
   ILargeTextDiff,
+  Image,
   ImageDiffType,
   ISubmoduleDiff,
 } from '../../models/diff'
 import { Button } from '../lib/button'
+import { TabBar, TabBarType } from '../tab-bar'
 import {
   NewImageDiff,
   ModifiedImageDiff,
@@ -38,6 +42,30 @@ import * as OcticonSymbol from '../octicons/octicons.generated'
 const NoDiffImage = encodePathAsUrl(__dirname, 'static/ufo-alert.svg')
 
 type ChangedFile = WorkingDirectoryFileChange | CommittedFileChange
+
+/** Whether an SVG is shown as its code or as the image it draws. */
+enum SvgDiffMode {
+  Code,
+  Preview,
+}
+
+/**
+ * Turn the lines of one version of an SVG into an image, or undefined when
+ * there is no such version (the file was added or deleted).
+ */
+function getSvgImage(lines: ReadonlyArray<string>): Image | undefined {
+  if (lines.length === 0) {
+    return undefined
+  }
+
+  const contents = Buffer.from(lines.join('\n'), 'utf8')
+  return new Image(
+    contents.buffer,
+    contents.toString('base64'),
+    'image/svg+xml',
+    contents.length
+  )
+}
 
 /** The props for the Diff component. */
 interface IDiffProps {
@@ -109,19 +137,85 @@ interface IDiffProps {
 
 interface IDiffState {
   readonly forceShowLargeDiff: boolean
+  readonly svgDiffMode: SvgDiffMode
 }
 
 /** A component which renders a diff for a file. */
 export class Diff extends React.Component<IDiffProps, IDiffState> {
+  /**
+   * The SVG preview, built from the contents already loaded for syntax
+   * highlighting. Memoized so the images aren't decoded again on every render.
+   */
+  private getSvgImageDiff = memoize(
+    (fileContents: IFileContents): IImageDiff => ({
+      kind: DiffType.Image,
+      previous: getSvgImage(fileContents.oldContents),
+      current: getSvgImage(fileContents.newContents),
+    })
+  )
+
   public constructor(props: IDiffProps) {
     super(props)
 
     this.state = {
       forceShowLargeDiff: false,
+      svgDiffMode: SvgDiffMode.Code,
     }
   }
 
   public render() {
+    const { diff, file } = this.props
+    const isSvgText =
+      Path.extname(file.path).toLowerCase() === '.svg' &&
+      (diff.kind === DiffType.Text || diff.kind === DiffType.LargeText)
+
+    if (!isSvgText) {
+      return this.renderDiff()
+    }
+
+    return (
+      <div className="svg-diff">
+        <TabBar
+          selectedIndex={this.state.svgDiffMode}
+          onTabClicked={this.onSvgDiffModeChanged}
+          type={TabBarType.Switch}
+        >
+          <span>Code</span>
+          <span>Preview</span>
+        </TabBar>
+        {this.state.svgDiffMode === SvgDiffMode.Preview
+          ? this.renderSvgPreview()
+          : this.renderDiff()}
+      </div>
+    )
+  }
+
+  private renderSvgPreview() {
+    const { fileContents } = this.props
+
+    // The contents of a newly selected file are still loading
+    if (fileContents === null) {
+      return null
+    }
+
+    if (fileContents.isTruncated) {
+      return (
+        <div className="panel empty">The SVG is too large to be previewed.</div>
+      )
+    }
+
+    return (
+      this.renderImage(this.getSvgImageDiff(fileContents)) ?? (
+        <div className="panel empty">The SVG can’t be previewed.</div>
+      )
+    )
+  }
+
+  private onSvgDiffModeChanged = (svgDiffMode: SvgDiffMode) => {
+    this.setState({ svgDiffMode })
+  }
+
+  private renderDiff() {
     const diff = this.props.diff
 
     switch (diff.kind) {

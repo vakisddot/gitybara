@@ -506,6 +506,21 @@
   }
 }
 
+// The Code / Preview switch above an SVG's diff
+.svg-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+
+  > .tab-bar {
+    flex-shrink: 0;
+    width: 200px;
+    margin: var(--spacing) auto 0;
+  }
+}
+
 .image-diff-container {
   display: flex;
   width: 100%;

@@ -38,6 +38,9 @@ export interface IFileContents {
   readonly oldContents: ReadonlyArray<string>
   readonly newContents: ReadonlyArray<string>
   readonly canBeExpanded: boolean
+
+  /** Whether either version was cut off at the highlighting limit. */
+  readonly isTruncated: boolean
 }
 
 interface IFileTokens {
@@ -126,6 +129,9 @@ export async function getFileContents(
     canBeExpanded:
       newContents !== null &&
       newContents.length <= MaxDiffExpansionNewContentLength,
+    isTruncated: [oldContents, newContents].some(
+      c => c !== null && c.length > MaxDiffExpansionNewContentLength
+    ),
   }
 }
 
