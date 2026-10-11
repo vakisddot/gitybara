@@ -1,0 +1,3 @@
+# Gitybara
+
+@AGENTS.md
