@@ -5,7 +5,9 @@ import { TipState } from '../models/tip'
 import { UiView } from './ui-view'
 import { Changes, ChangesSidebar } from './changes'
 import { NoChanges } from './changes/no-changes'
+import { IdeFileTree } from './changes/ide/ide-file-tree'
 import { IdeFileViewer } from './changes/ide/ide-file-viewer'
+import { TreeRowHeight } from './changes/filter-changes-list'
 import { MultipleSelection } from './changes/multiple-selection'
 import { FilesChangedBadge } from './changes/files-changed-badge'
 import { SelectedCommits, CompareSidebar } from './history'
@@ -161,7 +163,15 @@ interface IRepositoryViewState {
 const enum Tab {
   Changes = 0,
   History = 1,
+  Files = 2,
 }
+
+/** The sections by their `Tab`, which is also the order of Ctrl+Tab */
+const sectionsByTab: ReadonlyArray<RepositorySectionTab> = [
+  RepositorySectionTab.Changes,
+  RepositorySectionTab.History,
+  RepositorySectionTab.Files,
+]
 
 export class RepositoryView extends React.Component<
   IRepositoryViewProps,
@@ -225,10 +235,9 @@ export class RepositoryView extends React.Component<
   }
 
   private renderTabs(): JSX.Element {
-    const selectedTab =
-      this.props.state.selectedSection === RepositorySectionTab.Changes
-        ? Tab.Changes
-        : Tab.History
+    const selectedTab: Tab = sectionsByTab.indexOf(
+      this.props.state.selectedSection
+    )
 
     return (
       <TabBar selectedIndex={selectedTab} onTabClicked={this.onTabClicked}>
@@ -239,6 +248,10 @@ export class RepositoryView extends React.Component<
 
         <div className="with-indicator" id="history-tab">
           <span>History</span>
+        </div>
+
+        <div className="with-indicator" id="files-tab">
+          <span>Files</span>
         </div>
       </TabBar>
     )
@@ -278,7 +291,7 @@ export class RepositoryView extends React.Component<
     const availableWidth = clamp(this.props.sidebarWidth) - 1
 
     const scrollTop =
-      this.previousSection === RepositorySectionTab.History
+      this.previousSection !== RepositorySectionTab.Changes
         ? this.state.changesListScrollTop
         : undefined
     this.previousSection = RepositorySectionTab.Changes
@@ -357,7 +370,7 @@ export class RepositoryView extends React.Component<
     const currentBranch = tip.kind === TipState.Valid ? tip.branch : null
     const scrollTop =
       this.forceCompareListScrollTop ||
-      this.previousSection === RepositorySectionTab.Changes
+      this.previousSection !== RepositorySectionTab.History
         ? this.state.compareListScrollTop
         : undefined
     this.previousSection = RepositorySectionTab.History
@@ -396,6 +409,35 @@ export class RepositoryView extends React.Component<
     )
   }
 
+  private renderFilesSidebar(): JSX.Element {
+    const { repository, state, sidebarWidth } = this.props
+    const { changesState } = state
+    this.previousSection = RepositorySectionTab.Files
+
+    return (
+      <div
+        className="changes-list-container file-list filtered-changes-list"
+        role="tabpanel"
+        aria-labelledby="files-tab"
+      >
+        <IdeFileTree
+          key={repository.id}
+          repository={repository}
+          changedFiles={changesState.workingDirectory.files}
+          selectedPath={changesState.ideSelectedFilePath}
+          onSelectedPathChanged={this.onIdeSelectedPathChanged}
+          rowHeight={TreeRowHeight}
+          // -1 Because of right hand side border
+          availableWidth={clamp(sidebarWidth) - 1}
+        />
+      </div>
+    )
+  }
+
+  private onIdeSelectedPathChanged = (path: string) => {
+    this.props.dispatcher.setIdeSelectedFilePath(this.props.repository, path)
+  }
+
   private renderSidebarContents(): JSX.Element {
     const selectedSection = this.props.state.selectedSection
 
@@ -403,6 +445,8 @@ export class RepositoryView extends React.Component<
       return this.renderChangesSidebar()
     } else if (selectedSection === RepositorySectionTab.History) {
       return this.renderCompareSidebar()
+    } else if (selectedSection === RepositorySectionTab.Files) {
+      return this.renderFilesSidebar()
     } else {
       return assertNever(selectedSection, 'Unknown repository section')
     }
@@ -570,18 +614,6 @@ export class RepositoryView extends React.Component<
     const { changesState } = this.props.state
     const { workingDirectory, selection } = changesState
 
-    if (this.props.changesListViewMode === ChangesListViewMode.Ide) {
-      return (
-        <IdeFileViewer
-          key="ide-view"
-          repository={this.props.repository}
-          path={changesState.ideSelectedFilePath}
-          changedFiles={workingDirectory.files}
-          tabSize={this.props.selectedTabSize}
-        />
-      )
-    }
-
     if (selection.kind === ChangesSelectionKind.Stash) {
       return this.renderStashedChangesContent()
     }
@@ -698,12 +730,28 @@ export class RepositoryView extends React.Component<
     this.props.dispatcher.changeImageDiffType(imageDiffType)
   }
 
+  private renderContentForFiles(): JSX.Element {
+    const { changesState } = this.props.state
+
+    return (
+      <IdeFileViewer
+        key="ide-view"
+        repository={this.props.repository}
+        path={changesState.ideSelectedFilePath}
+        changedFiles={changesState.workingDirectory.files}
+        tabSize={this.props.selectedTabSize}
+      />
+    )
+  }
+
   private renderContent(): JSX.Element | null {
     const selectedSection = this.props.state.selectedSection
     if (selectedSection === RepositorySectionTab.Changes) {
       return this.renderContentForChanges()
     } else if (selectedSection === RepositorySectionTab.History) {
       return this.renderContentForHistory()
+    } else if (selectedSection === RepositorySectionTab.Files) {
+      return this.renderContentForFiles()
     } else {
       return assertNever(selectedSection, 'Unknown repository section')
     }
@@ -760,20 +808,17 @@ export class RepositoryView extends React.Component<
       return
     }
 
-    // Toggle tab selection on Ctrl+Tab. Note that we don't care
-    // about the shift key here, we can get away with that as long
-    // as there's only two tabs.
+    // Cycle through the tabs on Ctrl+Tab, and backwards with Shift.
     if (event.ctrlKey && event.key === 'Tab') {
-      this.changeTab()
+      this.changeTab(event.shiftKey ? -1 : 1)
       event.preventDefault()
     }
   }
 
-  private changeTab() {
-    const section =
-      this.props.state.selectedSection === RepositorySectionTab.History
-        ? RepositorySectionTab.Changes
-        : RepositorySectionTab.History
+  private changeTab(step: 1 | -1) {
+    const current = sectionsByTab.indexOf(this.props.state.selectedSection)
+    const count = sectionsByTab.length
+    const section = sectionsByTab[(current + step + count) % count]
 
     this.props.dispatcher.changeRepositorySection(
       this.props.repository,
@@ -782,16 +827,13 @@ export class RepositoryView extends React.Component<
   }
 
   private onTabClicked = (tab: Tab) => {
-    const section =
-      tab === Tab.History
-        ? RepositorySectionTab.History
-        : RepositorySectionTab.Changes
+    const section = sectionsByTab[tab]
 
     this.props.dispatcher.changeRepositorySection(
       this.props.repository,
       section
     )
-    if (!!section) {
+    if (section === RepositorySectionTab.History) {
       this.props.dispatcher.updateCompareForm(this.props.repository, {
         showBranchList: false,
       })

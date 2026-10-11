@@ -3445,7 +3445,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     if (selectedSection === RepositorySectionTab.History) {
       await this.refreshHistorySection(repository)
-    } else if (selectedSection === RepositorySectionTab.Changes) {
+    } else if (
+      selectedSection === RepositorySectionTab.Changes ||
+      selectedSection === RepositorySectionTab.Files
+    ) {
+      // The Files tab marks the files that have changes, so it needs the status
       await this.refreshChangesSection(repository, {
         includingStatus: true,
         clearPartialState: false,
@@ -4195,7 +4199,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     if (section === RepositorySectionTab.History) {
       refreshSectionPromise = this.refreshHistorySection(repository)
-    } else if (section === RepositorySectionTab.Changes) {
+    } else if (
+      section === RepositorySectionTab.Changes ||
+      section === RepositorySectionTab.Files
+    ) {
       refreshSectionPromise = this.refreshChangesSection(repository, {
         includingStatus: false,
         clearPartialState: false,

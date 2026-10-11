@@ -92,8 +92,6 @@ export type PossibleSelections =
 export enum ChangesListViewMode {
   Flat = 'flat',
   Tree = 'tree',
-  /** Browse every file in the repository, not only the changed ones */
-  Ide = 'ide',
 }
 
 /** All of the shared app state. */
@@ -488,6 +486,8 @@ export type Foldout =
 export enum RepositorySectionTab {
   Changes,
   History,
+  /** Browse and edit every file in the repository, not only the changed ones */
+  Files,
 }
 
 /**
