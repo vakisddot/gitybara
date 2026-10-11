@@ -16,6 +16,8 @@ import { mapStatus } from '../../../lib/status'
 import { formatBytes } from '../../lib/bytes'
 import { Button } from '../../lib/button'
 import { PathText } from '../../lib/path-text'
+import { AriaLiveContainer } from '../../accessibility/aria-live-container'
+import { DiffSearchInput } from '../../diff/diff-search-input'
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { IdeCodeEditor } from './ide-code-editor'
@@ -30,6 +32,7 @@ import {
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
 import { getFoldRanges } from './ide-folding'
+import { getIdeShortcut } from './ide-shortcuts'
 import {
   getChangeGroupStarts,
   getLineChanges,
@@ -124,6 +127,10 @@ interface IIdeFileViewerState {
   /** How visible unchanged text is, as a percentage */
   readonly unchangedTextOpacity: number
   readonly previousLinesMode: PreviousLinesMode
+
+  /** Whether the box to search the file is shown, and what it announced */
+  readonly isSearching: boolean
+  readonly searchMessage: string
 }
 
 /** A file of the repository to read and edit, without any of the diff. */
@@ -135,6 +142,9 @@ export class IdeFileViewer extends React.Component<
   private loadRequestId = 0
   private reloadTimeoutId: number | null = null
   private editorRef = React.createRef<IdeCodeEditor>()
+
+  /** Flips when the search has something to announce, even if it's the same */
+  private searchAnnouncementSignal = false
 
   /** What was read last, which isn't shown while there are unsaved edits */
   private latest: {
@@ -163,10 +173,17 @@ export class IdeFileViewer extends React.Component<
         0,
         Math.min(100, getNumber(UnchangedTextOpacityKey, 100))
       ),
+      isSearching: false,
+      searchMessage: '',
     }
   }
 
   public componentDidMount() {
+    document.addEventListener('keydown', this.onKeyDown)
+
+    // The Find menu item, see app.tsx
+    document.addEventListener('find-text', this.showSearch)
+
     this.loadContents()
   }
 
@@ -195,6 +212,8 @@ export class IdeFileViewer extends React.Component<
         isDirty: false,
         changedOnDisk: false,
         saveError: null,
+        isSearching: false,
+        searchMessage: '',
       })
       this.loadContents()
     } else if (prevProps.commit?.diff !== this.props.commit?.diff) {
@@ -208,6 +227,8 @@ export class IdeFileViewer extends React.Component<
   }
 
   public componentWillUnmount() {
+    document.removeEventListener('keydown', this.onKeyDown)
+    document.removeEventListener('find-text', this.showSearch)
     this.unmounted = true
     this.keepUnsavedEdits(this.props.repository, this.props.path)
 
@@ -463,18 +484,19 @@ export class IdeFileViewer extends React.Component<
     }))
   }
 
+  /** Go to the next or previous change. Returns false if there isn't one. */
   private goToChange(direction: 1 | -1) {
     const lines = this.getLines()
     const editor = this.editorRef.current
 
     if (lines === null || editor === null) {
-      return
+      return false
     }
 
     const starts = this.getChangeStarts(this.state.lineChanges, lines.length)
 
     if (starts.length === 0) {
-      return
+      return false
     }
 
     const reference = editor.getReferenceLine()
@@ -485,6 +507,71 @@ export class IdeFileViewer extends React.Component<
           starts[starts.length - 1]
 
     editor.revealLine(target)
+    return true
+  }
+
+  /** Whether the editor takes no typing, because of how it's shown. */
+  private isEditorReadOnly() {
+    const { contents } = this.state
+
+    return (
+      this.props.readOnly === true ||
+      (contents?.kind === 'text' && contents.isDeleted)
+    )
+  }
+
+  private onKeyDown = (event: KeyboardEvent) => {
+    switch (getIdeShortcut(event, this.isEditorReadOnly())) {
+      case 'find':
+        if (this.showSearch()) {
+          event.preventDefault()
+        }
+        break
+      case 'previous-change':
+        if (this.goToChange(-1)) {
+          event.preventDefault()
+        }
+        break
+      case 'next-change':
+        if (this.goToChange(1)) {
+          event.preventDefault()
+        }
+        break
+    }
+  }
+
+  /** Show the box to search the file, when there is text to search in. */
+  private showSearch = () => {
+    if (this.getLines() === null) {
+      return false
+    }
+
+    if (!this.state.isSearching) {
+      this.setState({ isSearching: true, searchMessage: '' })
+    }
+
+    return true
+  }
+
+  private onSearch = (query: string, direction: 'next' | 'previous') => {
+    const position = this.editorRef.current?.search(query, direction)
+
+    if (position === undefined) {
+      return
+    }
+
+    this.searchAnnouncementSignal = !this.searchAnnouncementSignal
+    this.setState({
+      searchMessage:
+        position === null
+          ? `No results for “${query}”`
+          : `Result ${position.index + 1} of ${position.total} for “${query}”`,
+    })
+  }
+
+  private onSearchClose = () => {
+    this.editorRef.current?.clearSearch()
+    this.setState({ isSearching: false, searchMessage: '' })
   }
 
   private onToggleHighlightChanges = () => {
@@ -531,7 +618,7 @@ export class IdeFileViewer extends React.Component<
         <Button
           className="ide-file-viewer-header-button"
           onClick={this.onPreviousChange}
-          tooltip="Previous change"
+          tooltip="Previous change (W)"
           ariaLabel="Go to the previous change"
         >
           <Octicon symbol={octicons.arrowUp} />
@@ -539,7 +626,7 @@ export class IdeFileViewer extends React.Component<
         <Button
           className="ide-file-viewer-header-button"
           onClick={this.onNextChange}
-          tooltip="Next change"
+          tooltip="Next change (S)"
           ariaLabel="Go to the next change"
         >
           <Octicon symbol={octicons.arrowDown} />
@@ -713,6 +800,18 @@ export class IdeFileViewer extends React.Component<
       <>
         {this.renderBanners(isDeleted)}
         <div className="ide-file-viewer-lines">
+          {this.state.isSearching && (
+            <>
+              <DiffSearchInput
+                onSearch={this.onSearch}
+                onClose={this.onSearchClose}
+              />
+              <AriaLiveContainer
+                message={this.state.searchMessage}
+                trackedUserInput={this.searchAnnouncementSignal}
+              />
+            </>
+          )}
           <IdeCodeEditor
             key={path}
             ref={this.editorRef}

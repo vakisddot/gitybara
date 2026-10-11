@@ -3,6 +3,7 @@ import * as Path from 'path'
 import CodeMirror from 'codemirror'
 import 'codemirror/addon/fold/foldcode'
 import 'codemirror/addon/fold/foldgutter'
+import 'codemirror/addon/search/searchcursor'
 import 'codemirror/addon/selection/active-line'
 import 'codemirror/mode/meta'
 
@@ -22,6 +23,15 @@ const TextPadding = 12
 const MaxAnalyzedLines = 50000
 
 const FoldGutter = 'ide-fold-gutter'
+
+/** Only this many matches of a search are marked, so a short query stays fast. */
+const MaxSearchMatches = 5000
+
+/** Where the match that a search went to is among the matches of the search. */
+export interface ISearchPosition {
+  readonly index: number
+  readonly total: number
+}
 
 /** What is worked out from the text of the editor, for the folding and guides */
 interface IAnalysis {
@@ -135,6 +145,20 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
   /** What is worked out from the text, until the text changes */
   private analysis: IAnalysis | null = null
+
+  /**
+   * The text that is searched for and where it was found. The matches are
+   * kept as long as the text doesn't change, so they stay where they were found.
+   */
+  private searchQuery: string | null = null
+  private searchMatches = new Array<{
+    readonly from: CodeMirror.Position
+    readonly to: CodeMirror.Position
+  }>()
+
+  /** The marks over the matches, the one of the current match looks different */
+  private searchMarks = new Array<CodeMirror.TextMarker>()
+  private searchIndex = -1
 
   public componentDidMount() {
     const container = this.containerRef.current
@@ -334,13 +358,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       return
     }
 
-    editor.operation(() => {
-      for (const mark of editor.findMarksAt(CodeMirror.Pos(line, 0))) {
-        if (isFoldMark(mark)) {
-          mark.clear()
-        }
-      }
-    })
+    this.unfoldLine(line)
 
     const { clientHeight } = editor.getScrollInfo()
     const top = Math.max(
@@ -350,6 +368,106 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     editor.scrollTo(null, top)
     this.lastJump = { line, top: editor.getScrollInfo().top }
+  }
+
+  /** Unfold the blocks that hide the line. */
+  private unfoldLine(line: number) {
+    const editor = this.editor
+
+    editor?.operation(() => {
+      for (const mark of editor.findMarksAt(CodeMirror.Pos(line, 0))) {
+        if (isFoldMark(mark)) {
+          mark.clear()
+        }
+      }
+    })
+  }
+
+  /**
+   * Mark the text that matches the query, whatever the case, and go to the next
+   * or the previous match. A new query starts at the first or the last match.
+   * Returns where the match is among the matches, or null when there is none.
+   */
+  public search(
+    query: string,
+    direction: 'next' | 'previous'
+  ): ISearchPosition | null {
+    const editor = this.editor
+
+    if (editor === null || query.trim() === '') {
+      this.clearSearch()
+      return null
+    }
+
+    if (query !== this.searchQuery) {
+      this.clearSearch()
+      this.searchQuery = query
+
+      const cursor = editor.getSearchCursor(query, CodeMirror.Pos(0, 0), true)
+
+      while (
+        this.searchMatches.length < MaxSearchMatches &&
+        cursor.findNext()
+      ) {
+        this.searchMatches.push({ from: cursor.from(), to: cursor.to() })
+      }
+
+      editor.operation(() => {
+        this.searchMarks = this.searchMatches.map(match =>
+          markSearchMatch(editor, match, false)
+        )
+      })
+
+      this.searchIndex = direction === 'next' ? -1 : this.searchMatches.length
+      this.containerRef.current?.classList.toggle(
+        'is-searching',
+        this.searchMatches.length > 0
+      )
+    }
+
+    const total = this.searchMatches.length
+
+    if (total === 0) {
+      return null
+    }
+
+    const previous = this.searchIndex
+    const index = (previous + (direction === 'next' ? 1 : -1) + total) % total
+    const { from, to } = this.searchMatches[index]
+
+    this.searchIndex = index
+
+    editor.operation(() => {
+      if (previous >= 0 && previous < total) {
+        this.searchMarks[previous].clear()
+        this.searchMarks[previous] = markSearchMatch(
+          editor,
+          this.searchMatches[previous],
+          false
+        )
+      }
+
+      this.searchMarks[index].clear()
+      this.searchMarks[index] = markSearchMatch(editor, { from, to }, true)
+    })
+
+    this.unfoldLine(from.line)
+    editor.scrollIntoView(
+      { from, to },
+      Math.floor(editor.getScrollInfo().clientHeight / 3)
+    )
+
+    return { index, total }
+  }
+
+  /** Take off the marks of the matches of a search. */
+  public clearSearch() {
+    this.searchMarks.forEach(mark => mark.clear())
+    this.searchMarks = []
+    this.searchMatches = []
+    this.searchQuery = null
+    this.searchIndex = -1
+    this.containerRef.current?.classList.remove('is-searching')
   }
 
   private getAnalysis(): IAnalysis {
@@ -443,6 +561,11 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   private onChanges = () => {
+    // The matches were found in the text from before
+    if (this.searchQuery !== null) {
+      this.clearSearch()
+    }
+
     this.updateDirty()
     this.scheduleRuler()
   }
@@ -746,6 +869,20 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       />
     )
   }
+}
+
+/** Mark a match of a search, in another way when it's the one gone to. */
+function markSearchMatch(
+  editor: CodeMirror.Editor,
+  {
+    from,
+    to,
+  }: { readonly from: CodeMirror.Position; readonly to: CodeMirror.Position },
+  isCurrent: boolean
+) {
+  return editor.markText(from, to, {
+    className: isCurrent ? 'ide-search-current' : 'ide-search-match',
+  })
 }
 
 function isFoldMark(mark: CodeMirror.TextMarker): boolean {

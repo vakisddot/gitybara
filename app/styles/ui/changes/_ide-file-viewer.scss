@@ -15,6 +15,11 @@
     min-width: 0;
   }
 
+  // The options of the view come right after the status of the file
+  .header .octicon.status {
+    margin-right: var(--spacing-half);
+  }
+
   .ide-file-viewer-header-buttons {
     display: flex;
     flex-shrink: 0;
@@ -151,6 +156,27 @@
     .CodeMirror pre.CodeMirror-line.ide-changed-line > span,
     .CodeMirror-focused .CodeMirror-activeline pre.CodeMirror-line > span {
       opacity: 1;
+    }
+
+    // What matches a search has to be readable wherever it is
+    .ide-code-editor.is-searching .CodeMirror pre.CodeMirror-line > span {
+      opacity: 1;
+    }
+
+    // Leave the scroll bar uncovered
+    .diff-search {
+      @include diff-search;
+      right: calc(var(--spacing) + 15px);
+    }
+
+    // The same colors as the search of the diff
+    .ide-search-match {
+      background-color: rgba(255, 255, 0, 0.4);
+    }
+
+    .ide-search-current {
+      background: Highlight;
+      color: HighlightText;
     }
 
     .CodeMirror-gutters {
