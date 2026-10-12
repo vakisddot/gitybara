@@ -1,0 +1,75 @@
+name: Release
+
+# Builds the unsigned Windows x64 installer. Pushing a tag like v0.1.0 also
+# creates a draft GitHub release with the installers attached; publish it from
+# the Releases page once it looks right. Running the workflow by hand only
+# uploads the build as a workflow artifact.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 24.19.0
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(node -p "require('./app/package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match app/package.json version $version" >&2
+            exit 1
+          fi
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          arch: x64
+      - name: Build production app
+        run: yarn build:prod
+        env:
+          DESKTOP_OAUTH_CLIENT_ID: ${{ secrets.DESKTOP_OAUTH_CLIENT_ID }}
+          DESKTOP_OAUTH_CLIENT_SECRET:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET }}
+          npm_config_arch: x64
+          TARGET_ARCH: x64
+      - name: Package the installer
+        run: yarn package
+        env:
+          npm_config_arch: x64
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Gitybara-windows-x64
+          path: |
+            dist/GitybaraSetup-x64.exe
+            dist/GitybaraSetup-x64.msi
+            dist/Gitybara-*-full.nupkg
+            dist/RELEASES
+          if-no-files-found: error
+      - name: Create a draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            prerelease="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" $prerelease --draft \
+            --title "Gitybara ${GITHUB_REF_NAME#v}" --generate-notes \
+            dist/GitybaraSetup-x64.exe dist/GitybaraSetup-x64.msi \
+            dist/Gitybara-*-full.nupkg dist/RELEASES
