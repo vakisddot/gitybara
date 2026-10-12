@@ -218,11 +218,15 @@ body.theme-catppuccin-mocha {
   --diff-empty-row-background-color: #{$ctp-mantle};
   --diff-empty-hunk-handle: #{$ctp-surface1};
 
-  // Syntax highlighting text colors, following Catppuccin's VS Code theme
-  --syntax-variable-color: #{$ctp-text};
+  // CodeMirror groups many C# names as variables, so keep them visibly colored.
+  --syntax-variable-color: #{$ctp-blue};
   --syntax-alt-variable-color: #{$ctp-blue};
   --syntax-keyword-color: #{$ctp-mauve};
-  --syntax-atom-color: #{$ctp-peach};
+  --syntax-control-color: #{$ctp-red};
+  --syntax-number-color: #{$ctp-peach};
+  --syntax-operator-color: #{$ctp-sky};
+  --syntax-punctuation-color: #{$ctp-teal};
+  --syntax-atom-color: #{$ctp-mauve};
   --syntax-string-color: #{$ctp-green};
   --syntax-qualifier-color: #{$ctp-yellow};
   --syntax-type-color: #{$ctp-yellow};
@@ -232,6 +236,25 @@ body.theme-catppuccin-mocha {
   --syntax-link-color: #{$ctp-blue};
   --syntax-header-color: #{$ctp-red};
   --syntax-quote-color: #{$ctp-pink};
+
+  .cm-s-default {
+    .cm-number {
+      color: $ctp-peach;
+    }
+
+    .cm-def,
+    .cm-builtin {
+      color: $ctp-yellow;
+    }
+
+    .cm-operator {
+      color: $ctp-sky;
+    }
+
+    .cm-bracket {
+      color: $ctp-teal;
+    }
+  }
 
   // Colors for form errors
   --error-color: #{$ctp-red};

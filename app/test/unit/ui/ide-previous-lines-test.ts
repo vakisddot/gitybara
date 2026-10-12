@@ -11,7 +11,7 @@ import {
   getLineChanges,
   NoLineChanges,
 } from '../../../src/ui/changes/ide/ide-line-changes'
-import { fireEvent, render } from '../../helpers/ui/render'
+import { render } from '../../helpers/ui/render'
 
 let container: HTMLDivElement
 let editor: CodeMirror.Editor
@@ -30,6 +30,13 @@ const sizeProperties = [
 const originalSizes = sizeProperties.map(key =>
   Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, key)
 )
+
+/** The count in the gutter of the line, if it has one. */
+const countAt = (line: number) =>
+  editor.lineInfo(line).gutterMarkers?.['ide-previous-lines-gutter']
+    ?.textContent ?? null
+
+const widgetsAt = (line: number) => editor.lineInfo(line).widgets?.length ?? 0
 
 beforeEach(() => {
   // jsdom has no text layout; these tests exercise document and widget behavior.
@@ -53,7 +60,7 @@ beforeEach(() => {
     lineNumbers: true,
     viewportMargin: Infinity,
   })
-  previews = new IdePreviousLines(editor, container)
+  previews = new IdePreviousLines(editor)
   previews.setBlocks([
     {
       line: 1,
@@ -66,7 +73,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  previews.destroy()
+  previews.clear()
   container.remove()
   window.Range.prototype.getBoundingClientRect = originalBounds
   window.Range.prototype.getClientRects = originalRects
@@ -84,7 +91,7 @@ afterEach(() => {
 })
 
 describe('Previous lines display', () => {
-  it('emphasizes both sides of the extended condition in ghost and hover without editing the file', () => {
+  it('emphasizes both sides of the extended condition without editing the file', () => {
     const before = '      isSameSet(a.removedBefore, b.removedBefore))'
     const lines = [
       '      isSameSet(a.removedBefore, b.removedBefore) &&',
@@ -115,44 +122,29 @@ describe('Previous lines display', () => {
       lineChanges: getLineChanges(diff.hunks),
       highlightChanges: true,
       unchangedTextOpacity: 0,
-      previousLinesMode: 'ghost',
+      showPreviousLines: true,
       onDirtyChange: dirty => dirtyChanges.push(dirty),
       onSave: () => {},
     }
     const view = render(React.createElement(IdeCodeEditor, { ...props, ref }))
-    fireEvent.click(view.container.querySelector('.ide-previous-lines-toggle')!)
-    const assertEmphasis = () => {
-      assert.strictEqual(
-        view.container.querySelector('.ide-inline-deletion')?.textContent,
-        ')'
-      )
-      assert.strictEqual(
-        view.container.querySelector('.ide-inline-change')?.textContent,
-        ' &&'
-      )
-      assert.strictEqual(
-        view.container.querySelector('.ide-previous-line code')?.textContent,
-        before
-      )
-      assert.strictEqual(
-        view.container.querySelector('.ide-previous-line-number')?.textContent,
-        '103'
-      )
-      assert.strictEqual(ref.current?.getLines().join('\n'), props.text)
-      assert.deepStrictEqual(dirtyChanges, [])
-    }
-    assertEmphasis()
-    view.rerender(
-      React.createElement(IdeCodeEditor, {
-        ...props,
-        ref,
-        previousLinesMode: 'hover',
-      })
+    assert.strictEqual(
+      view.container.querySelector('.ide-inline-deletion')?.textContent,
+      ')'
     )
-    fireEvent.mouseEnter(
-      view.container.querySelector('.ide-previous-lines-marker')!
+    assert.strictEqual(
+      view.container.querySelector('.ide-inline-change')?.textContent,
+      ' &&'
     )
-    assertEmphasis()
+    assert.strictEqual(
+      view.container.querySelector('.ide-previous-line code')?.textContent,
+      before
+    )
+    assert.strictEqual(
+      view.container.querySelector('.ide-previous-line-number')?.textContent,
+      '103'
+    )
+    assert.strictEqual(ref.current?.getLines().join('\n'), props.text)
+    assert.deepStrictEqual(dirtyChanges, [])
   })
 
   it('splits removal emphasis across syntax tokens while preserving tabs, Unicode and literal HTML', () => {
@@ -168,38 +160,30 @@ describe('Previous lines display', () => {
       },
     ])
     const generation = editor.getDoc().changeGeneration()
-    for (const mode of ['ghost', 'hover'] as const) {
-      previews.setMode(mode)
-      if (mode === 'ghost') {
-        fireEvent.click(container.querySelector('.ide-previous-lines-toggle')!)
-      } else {
-        fireEvent.mouseEnter(
-          container.querySelector('.ide-previous-lines-marker')!
-        )
-      }
-      const code = container.querySelector('.ide-previous-line code')!
-      const marked = code.querySelectorAll('.ide-inline-deletion')
-      assert.ok(marked.length > 1)
-      assert.strictEqual(
-        Array.from(marked, span => span.textContent).join(''),
-        before.slice(start)
-      )
-      assert.ok(code.querySelector('.cm-string.ide-inline-deletion'))
-      assert.strictEqual(code.textContent, before)
-      assert.strictEqual(code.querySelector('tag'), null)
-      assert.strictEqual(
-        container
-          .querySelectorAll('.ide-previous-line')[1]
-          .querySelector('.ide-inline-deletion'),
-        null
-      )
-    }
+    previews.setShown(true)
+
+    const code = container.querySelector('.ide-previous-line code')!
+    const marked = code.querySelectorAll('.ide-inline-deletion')
+    assert.ok(marked.length > 1)
+    assert.strictEqual(
+      Array.from(marked, span => span.textContent).join(''),
+      before.slice(start)
+    )
+    assert.ok(code.querySelector('.cm-string.ide-inline-deletion'))
+    assert.strictEqual(code.textContent, before)
+    assert.strictEqual(code.querySelector('tag'), null)
+    assert.strictEqual(
+      container
+        .querySelectorAll('.ide-previous-line')[1]
+        .querySelector('.ide-inline-deletion'),
+      null
+    )
     assert.strictEqual(editor.getValue(), 'first\nchanged\nlast')
     assert.ok(editor.getDoc().isClean(generation))
     assert.deepStrictEqual(editor.historySize(), { undo: 0, redo: 0 })
   })
 
-  it('keeps insertion emphasis when switching preview modes without changing the file', () => {
+  it('keeps insertion emphasis when previous lines are shown or hidden without changing the file', () => {
     const ref = React.createRef<IdeCodeEditor>()
     const dirtyChanges = new Array<boolean>()
     const props: React.ComponentProps<typeof IdeCodeEditor> = {
@@ -217,7 +201,7 @@ describe('Previous lines display', () => {
       },
       highlightChanges: true,
       unchangedTextOpacity: 0,
-      previousLinesMode: 'ghost',
+      showPreviousLines: false,
       onDirtyChange: dirty => dirtyChanges.push(dirty),
       onSave: () => {},
     }
@@ -227,19 +211,23 @@ describe('Previous lines display', () => {
       ', b'
     )
     assert.strictEqual(
-      view.container.querySelector('.ide-previous-lines-toggle'),
+      view.container.querySelector('.ide-previous-lines-count'),
       null
     )
     view.rerender(
       React.createElement(IdeCodeEditor, {
         ...props,
         ref,
-        previousLinesMode: 'hover',
+        showPreviousLines: true,
       })
     )
     assert.strictEqual(
       view.container.querySelector('.ide-inline-change')?.textContent,
       ', b'
+    )
+    assert.strictEqual(
+      view.container.querySelector('.ide-previous-lines-block'),
+      null
     )
     assert.strictEqual(ref.current?.getLines().join('\n'), props.text)
     assert.deepStrictEqual(dirtyChanges, [])
@@ -252,69 +240,135 @@ describe('Previous lines display', () => {
     )
     assert.strictEqual(view.container.querySelector('.ide-inline-change'), null)
   })
-  it('expands and collapses old code without changing document text or undo history', () => {
+
+  it('counts the hidden lines in the gutter where they were', () => {
+    assert.strictEqual(countAt(0), null)
+    assert.strictEqual(countAt(1), '−2')
+    assert.strictEqual(countAt(2), '−1')
+    assert.strictEqual(widgetsAt(1), 0)
+    assert.strictEqual(widgetsAt(2), 0)
+  })
+
+  it('shows and hides old code without changing document text or undo history', () => {
     const generation = editor.getDoc().changeGeneration()
-    const button = container.querySelector('button')!
-    fireEvent.click(button)
+    previews.setShown(true)
     assert.match(container.textContent ?? '', /old first/)
-    assert.strictEqual(button.getAttribute('aria-expanded'), 'true')
-    fireEvent.click(button)
+    assert.match(container.textContent ?? '', /deleted at EOF/)
+    previews.setShown(false)
     assert.doesNotMatch(container.textContent ?? '', /old first/)
     assert.strictEqual(editor.getValue(), 'first\nchanged\nlast')
     assert.ok(editor.getDoc().isClean(generation))
     assert.deepStrictEqual(editor.historySize(), { undo: 0, redo: 0 })
   })
 
-  it('switches modes repeatedly without retaining widgets or popups', () => {
+  it('switches repeatedly without retaining widgets or counts', () => {
     for (let i = 0; i < 3; i++) {
-      previews.setMode('hover')
-      assert.strictEqual(editor.lineInfo(1).widgets?.length ?? 0, 0)
-      const marker = container.querySelector('.ide-previous-lines-marker')!
-      fireEvent.mouseEnter(marker)
-      assert.ok(container.querySelector('[role="dialog"]'))
-      previews.setMode('ghost')
-      assert.strictEqual(container.querySelector('[role="dialog"]'), null)
-      assert.strictEqual(editor.lineInfo(1).widgets?.length, 1)
-      assert.strictEqual(editor.lineInfo(2).widgets?.length, 1)
+      previews.setShown(true)
+      assert.strictEqual(widgetsAt(1), 1)
+      assert.strictEqual(widgetsAt(2), 1)
+      assert.strictEqual(countAt(1), null)
+      assert.strictEqual(countAt(2), null)
+      previews.setShown(false)
+      assert.strictEqual(widgetsAt(1), 0)
+      assert.strictEqual(widgetsAt(2), 0)
+      assert.strictEqual(countAt(1), '−2')
     }
     assert.strictEqual(editor.getValue(), 'first\nchanged\nlast')
   })
 
+  it('keeps the gutter while the lines are shown, so the text stays put', () => {
+    const gutters = () => editor.getOption('gutters') ?? []
+    assert.ok(gutters().includes('ide-previous-lines-gutter'))
+    previews.setShown(true)
+    assert.ok(gutters().includes('ide-previous-lines-gutter'))
+    previews.setBlocks([])
+    assert.ok(!gutters().includes('ide-previous-lines-gutter'))
+  })
+
   it('keeps previews with their anchor when lines are inserted before them', () => {
     editor.replaceRange('inserted\n', CodeMirror.Pos(0, 0))
-    previews.setMode('hover')
-    assert.ok(editor.lineInfo(2).gutterMarkers?.['ide-previous-lines-gutter'])
-    previews.setMode('ghost')
-    assert.strictEqual(editor.lineInfo(2).widgets?.length, 1)
+    assert.strictEqual(countAt(2), '−2')
+    previews.setShown(true)
+    assert.strictEqual(widgetsAt(2), 1)
     assert.strictEqual(editor.getValue(), 'inserted\nfirst\nchanged\nlast')
   })
 
-  it('retains separate hover previews for deletions before and after the last line', () => {
+  describe('with motion', () => {
+    const blockAt = (line: number) =>
+      editor.lineInfo(line).widgets?.[0]?.node as HTMLElement | undefined
+    const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
+    let reduceMotion = false
+
+    beforeEach(() => {
+      reduceMotion = false
+      window.matchMedia = () => ({ matches: reduceMotion } as MediaQueryList)
+    })
+
+    afterEach(() => {
+      delete (window as Partial<Window>).matchMedia
+    })
+
+    it('grows the old lines open from nothing', async () => {
+      previews.setShown(true)
+      assert.strictEqual(blockAt(1)?.style.height, '0px')
+
+      await wait(450)
+      assert.strictEqual(widgetsAt(1), 1)
+      assert.strictEqual(blockAt(1)?.style.height, '')
+      assert.strictEqual(blockAt(1)?.style.overflow, '')
+    })
+
+    it('shrinks the old lines closed before they go', async () => {
+      previews.setShown(true)
+      await wait(450)
+
+      previews.setShown(false)
+      assert.strictEqual(widgetsAt(1), 1)
+      assert.strictEqual(blockAt(1)?.style.height, '20px')
+      assert.strictEqual(countAt(1), null)
+
+      await wait(450)
+      assert.strictEqual(widgetsAt(1), 0)
+      assert.strictEqual(countAt(1), '−2')
+    })
+
+    it('turns around when they are shown again while they close', async () => {
+      previews.setShown(true)
+      await wait(450)
+      previews.setShown(false)
+      await wait(50)
+      previews.setShown(true)
+
+      await wait(450)
+      assert.strictEqual(widgetsAt(1), 1)
+      assert.strictEqual(blockAt(1)?.style.height, '')
+      assert.strictEqual(countAt(1), null)
+    })
+
+    it('stops when the file changes while they open', async () => {
+      previews.setShown(true)
+      previews.setBlocks([])
+      await wait(450)
+      assert.strictEqual(widgetsAt(1), 0)
+      assert.strictEqual(editor.getValue(), 'first\nchanged\nlast')
+    })
+
+    it('hides them at once when the system asks for less motion', () => {
+      reduceMotion = true
+      previews.setShown(true)
+      previews.setShown(false)
+      assert.strictEqual(widgetsAt(1), 0)
+      assert.strictEqual(countAt(1), '−2')
+    })
+  })
+
+  it('counts deletions before and after the last line together', () => {
     previews.setBlocks([
       { line: 2, oldLineNumber: 3, lines: ['before last'], inlineChanges: [] },
       { line: 3, oldLineNumber: 5, lines: ['after last'], inlineChanges: [] },
     ])
-    previews.setMode('hover')
-    const markers =
-      editor.lineInfo(2).gutterMarkers?.['ide-previous-lines-gutter']
-    assert.ok(markers)
-    assert.strictEqual(markers.querySelectorAll('button').length, 2)
-  })
-
-  it('allows keyboard preview, pinning, and closing with Escape', () => {
-    previews.setMode('hover')
-    const marker = container.querySelector<HTMLButtonElement>(
-      '.ide-previous-lines-marker'
-    )!
-    marker.focus()
-    assert.ok(container.querySelector('[role="dialog"]'))
-    fireEvent.click(marker)
-    assert.ok(
-      container.querySelector<HTMLButtonElement>('[role="dialog"] button')
-        ?.disabled
-    )
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    assert.strictEqual(container.querySelector('[role="dialog"]'), null)
-    assert.strictEqual(document.activeElement, marker)
+    assert.strictEqual(countAt(2), '−2')
+    previews.setShown(true)
+    assert.strictEqual(widgetsAt(2), 2)
   })
 })

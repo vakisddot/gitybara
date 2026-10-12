@@ -1,4 +1,14 @@
-export type IdeShortcut = 'find' | 'previous-change' | 'next-change'
+export type IdeShortcut =
+  | 'find'
+  | 'previous-change'
+  | 'next-change'
+  | 'previous-lines'
+
+/**
+ * How long the key that shows the previous lines is held before it only shows
+ * them while it's held, instead of switching them on or off, in milliseconds.
+ */
+export const PreviousLinesHoldDelay = 250
 
 /** Inputs that take no text, so a letter that is typed in them isn't text */
 const NonTextInputTypes = new Set([
@@ -42,8 +52,9 @@ export function isTypingTarget(
 
 /**
  * What a key press in the file viewer asks for, if anything. The keys to go to
- * the previous and the next change (W and S) are plain letters, so they are left
- * alone where the letters are typed.
+ * the previous and the next change (W and S) and to show the previous lines (F)
+ * are plain letters, so they are left alone where the letters are typed. The
+ * previous lines can be shown from there with Ctrl+' (Cmd+' on macOS).
  */
 export function getIdeShortcut(
   event: KeyboardEvent,
@@ -59,7 +70,10 @@ export function getIdeShortcut(
     : event.ctrlKey && !event.metaKey
 
   if (isCmdOrCtrl) {
-    return key === 'f' && !event.shiftKey ? 'find' : null
+    if (event.shiftKey) {
+      return null
+    }
+    return key === 'f' ? 'find' : key === "'" ? 'previous-lines' : null
   }
 
   if (
@@ -71,5 +85,26 @@ export function getIdeShortcut(
     return null
   }
 
-  return key === 'w' ? 'previous-change' : key === 's' ? 'next-change' : null
+  switch (key) {
+    case 'w':
+      return 'previous-change'
+    case 's':
+      return 'next-change'
+    case 'f':
+      return 'previous-lines'
+    default:
+      return null
+  }
+}
+
+/**
+ * Whether the previous lines are shown once the key that shows them is let go.
+ * A tap switches them on or off, while a longer press only shows them as long
+ * as the key is held.
+ */
+export function arePreviousLinesShownAfterRelease(
+  wereShown: boolean,
+  heldFor: number
+): boolean {
+  return heldFor < PreviousLinesHoldDelay ? !wereShown : wereShown
 }

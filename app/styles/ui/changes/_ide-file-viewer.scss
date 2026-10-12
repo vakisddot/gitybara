@@ -10,6 +10,78 @@
 .ide-file-viewer {
   background: var(--background-color);
 
+  .ide-csharp-status {
+    flex-shrink: 0;
+    max-width: 180px;
+    margin-right: var(--spacing-half);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .ide-csharp-results {
+    flex-shrink: 0;
+    max-height: 180px;
+    overflow: auto;
+    padding: var(--spacing-half) var(--spacing);
+    border-top: 1px solid var(--box-border-color);
+
+    .ide-csharp-results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    ul {
+      padding: 0;
+      margin: var(--spacing-half) 0 0;
+      list-style: none;
+    }
+
+    li button {
+      max-width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--link-button-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+  }
+
+  .cm-s-default {
+    .ide-csharp-type {
+      color: var(--syntax-type-color);
+    }
+    .ide-csharp-method {
+      color: var(--syntax-alt-variable-color);
+    }
+    .ide-csharp-variable {
+      color: var(--syntax-variable-color);
+    }
+    .ide-csharp-constant {
+      color: var(--syntax-atom-color);
+    }
+    .ide-csharp-keyword {
+      color: var(--syntax-keyword-color);
+    }
+    .ide-csharp-control {
+      color: var(--syntax-control-color, var(--syntax-keyword-color));
+    }
+    .ide-csharp-number {
+      color: var(--syntax-number-color, var(--syntax-atom-color));
+    }
+    .ide-csharp-operator {
+      color: var(--syntax-operator-color, var(--text-color));
+    }
+    .ide-csharp-punctuation {
+      color: var(--syntax-punctuation-color, var(--text-color));
+    }
+  }
+
   .header .ide-file-viewer-path {
     flex: 1 1 auto;
     min-width: 0;
@@ -40,6 +112,40 @@
     }
   }
 
+  // The list of the keys of the viewer, see ide-keys-button.tsx
+  .ide-keys-popover {
+    width: 340px;
+
+    h3 {
+      margin-top: 0;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: var(--spacing-half) var(--spacing);
+      align-items: baseline;
+      margin: 0;
+    }
+
+    dt {
+      display: flex;
+      gap: var(--spacing-half);
+      white-space: nowrap;
+    }
+
+    dd {
+      margin: 0;
+      color: var(--text-secondary-color);
+    }
+
+    .ide-keys-popover-note {
+      margin: var(--spacing) 0 0;
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
   .ide-file-viewer-message {
     padding: var(--spacing-double);
     color: var(--text-secondary-color);
@@ -65,17 +171,6 @@
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-  }
-
-  .ide-file-viewer-previous-mode {
-    height: 22px;
-    margin-left: var(--spacing);
-    padding: 0 4px;
-    font-size: var(--font-size-sm);
-    color: var(--text-color);
-    background: var(--background-color);
-    border: 1px solid var(--diff-border-color);
-    border-radius: 3px;
   }
 
   .ide-file-viewer-banner {
@@ -334,130 +429,75 @@
     opacity: 1;
   }
 
-  .ide-previous-lines-ghost {
-    border-left: 3px solid var(--color-deleted);
-    background: var(--diff-delete-background-color);
-  }
-
-  .ide-previous-lines-toggle {
-    display: block;
-    width: 100%;
-    padding: 2px 12px;
-    text-align: left;
-    font-family: var(--font-family-sans-serif);
-    font-size: var(--font-size-sm);
-    line-height: 20px;
-    color: var(--text-secondary-color);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-
-    &:hover {
-      color: var(--text-color);
-      background: var(--box-hover-background-color);
-    }
-  }
-
+  // Wide enough for the count of a few hundred lines
   .ide-previous-lines-gutter {
-    width: 20px;
+    width: 32px;
   }
 
-  .ide-previous-lines-markers {
-    display: flex;
-    width: 20px;
-  }
-
-  .ide-previous-lines-marker {
-    flex: 1;
-    min-width: 0;
-    height: 20px;
-    padding: 0;
+  .ide-previous-lines-count {
+    padding-right: 4px;
+    text-align: right;
+    font-family: var(--font-family-sans-serif);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
     color: var(--color-deleted);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--diff-delete-background-color);
-    }
-  }
-
-  .ide-previous-lines-popup {
-    position: absolute;
-    z-index: 10;
-    width: max-content;
-    max-width: calc(100% - 8px);
-    max-height: calc(100% - 8px);
-    overflow: auto;
-    color: var(--diff-text-color);
-    background: var(--background-color);
-    border: 1px solid var(--color-deleted);
-    border-radius: 4px;
-    box-shadow: 0 4px 16px #0004;
-  }
-
-  .ide-previous-lines-popup-header {
-    position: sticky;
-    top: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing);
-    padding: var(--spacing-half) var(--spacing);
-    font-size: var(--font-size-sm);
-    background: var(--background-color);
-
-    span {
-      flex: 1;
-      white-space: nowrap;
-    }
-
-    button {
-      padding: 2px 6px;
-      color: var(--text-secondary-color);
-      background: transparent;
-      border: 1px solid var(--diff-border-color);
-      border-radius: 3px;
-      cursor: pointer;
-
-      &:disabled {
-        opacity: 0.6;
-        cursor: default;
-      }
-    }
+    white-space: nowrap;
+    user-select: none;
   }
 
   .ide-previous-lines-rows {
-    overflow: auto;
     font-family: var(--font-family-monospace);
     font-size: var(--font-size-sm);
-    background: var(--diff-delete-background-color);
   }
 
+  // Each line has the color, as a line that is longer than the others goes on
+  // past the edge of the block
   .ide-previous-line {
     display: flex;
     min-width: max-content;
     line-height: 20px;
+    background: linear-gradient(var(--diff-delete-background-color), var(--diff-delete-background-color)), var(--diff-delete-background-color);
 
+    // The padding of the lines of the file, so the text lines up with them
     code {
-      padding-right: 12px;
+      padding: 0 12px;
       font: inherit;
       white-space: pre;
     }
   }
 
-  .ide-previous-line-number {
-    min-width: 5ch;
-    padding: 0 8px;
-    text-align: right;
-    color: var(--diff-line-number-color);
+  // Over the gutter and as wide as it, with the bar of the changes and the line
+  // at its edge. It stays put while the text scrolls sideways under it, so it
+  // has the colors of what is behind it without being see-through.
+  .ide-previous-line-gutter {
+    position: sticky;
+    left: 0;
+    display: flex;
+    flex: none;
+    width: var(--ide-gutter-width, auto);
+    background: linear-gradient(var(--diff-delete-background-color), var(--diff-delete-background-color)), linear-gradient(var(--diff-delete-background-color), var(--diff-delete-background-color)),
+      var(--diff-gutter-background-color);
+    box-shadow: inset 3px 0 0 var(--color-deleted), inset -1px 0 0 var(--diff-border-color);
     user-select: none;
   }
 
+  // Where the numbers of the lines of the file are
+  .ide-previous-line-number {
+    flex: none;
+    box-sizing: border-box;
+    width: var(--ide-line-number-width, 5ch);
+    padding-right: 8px;
+    text-align: right;
+    color: var(--diff-line-number-color);
+  }
+
+  // Where the count of the hidden lines is
   .ide-previous-line-minus {
-    width: 20px;
+    flex: 1;
+    padding-right: 4px;
+    text-align: right;
     color: var(--color-deleted);
-    user-select: none;
   }
 
   // Shown after a line that starts a folded block

@@ -14,7 +14,19 @@ import {
   getLineIndentation,
 } from './ide-indentation'
 import { IInlineChange, ILineChanges } from './ide-line-changes'
-import { IdePreviousLines, PreviousLinesMode } from './ide-previous-lines'
+import { IdePreviousLines } from './ide-previous-lines'
+import * as ipcRenderer from '../../../lib/ipc-renderer'
+import { getCSharpTokenClass } from '../../../lib/csharp/semantic-tokens'
+import {
+  ICSharpDocument,
+  ICSharpLocation,
+  ICSharpPosition,
+} from '../../../lib/csharp/types'
+import {
+  highlightCSharp,
+  navigateCSharp,
+  updateCSharpDocument,
+} from './ide-csharp'
 
 /** Padding to the left of the text of a line, keep in sync with the styles. */
 const TextPadding = 12
@@ -81,13 +93,30 @@ interface IIdeCodeEditorProps {
   /** How visible unchanged text is, as a percentage */
   readonly unchangedTextOpacity: number
 
-  readonly previousLinesMode: PreviousLinesMode
+  /** Whether to show the lines that were removed or replaced */
+  readonly showPreviousLines: boolean
 
   /** Called when the text starts or stops differing from the saved text. */
   readonly onDirtyChange: (isDirty: boolean) => void
 
   /** Called when the user asks to save the file. */
   readonly onSave: () => void
+
+  /** Present only for C# source in the working repository. */
+  readonly repositoryPath?: string
+  readonly navigationPosition?: ICSharpPosition
+  readonly onNavigate?: (
+    location: ICSharpLocation,
+    origin: ICSharpLocation
+  ) => void
+  readonly onNavigationResults?: (
+    locations: ReadonlyArray<ICSharpLocation>,
+    origin: ICSharpLocation,
+    references: boolean
+  ) => void
+  readonly onNavigationBack?: () => void
+  readonly onNavigationForward?: () => void
+  readonly onCSharpStatus?: (message: string, failed: boolean) => void
 }
 
 /**
@@ -124,6 +153,13 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   private previousLines: IdePreviousLines | null = null
   private inlineChanges: ReadonlyArray<IInlineChange> | null = null
   private inlineMarks = new Array<CodeMirror.TextMarker>()
+  private semanticMarks = new Array<CodeMirror.TextMarker>()
+  private semanticTimer: number | null = null
+  private semanticGeneration = 0
+  private semanticPending = false
+  private semanticAgain = false
+  private semanticFailed = false
+  private navigationRequestId = 0
 
   /** The classes added to the lines to mark the changes, to take them off */
   private changeClasses = new Array<{
@@ -196,15 +232,30 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
         'Cmd-S': save,
         Tab: cm => this.onTab(cm),
         'Shift-Tab': 'indentLess',
+        F12: () => {
+          this.navigate(false)
+        },
+        'Shift-F12': () => {
+          this.navigate(true)
+        },
+        'Alt-Left': () => this.props.onNavigationBack?.(),
+        'Alt-Right': () => this.props.onNavigationForward?.(),
       },
     })
 
     this.editor = editor
-    this.previousLines = new IdePreviousLines(editor, container)
-    this.previousLines.setMode(this.props.previousLinesMode)
+    this.previousLines = new IdePreviousLines(editor)
+    this.previousLines.setShown(this.props.showPreviousLines)
     editor.on('renderLine', this.onRenderLine)
     editor.on('changes', this.onChanges)
     editor.on('update', this.onUpdate)
+    editor.on('viewportChange', this.scheduleSemanticHighlight)
+    if (this.props.repositoryPath !== undefined) {
+      ipcRenderer.on('csharp-refresh', this.onCSharpRefresh)
+      editor
+        .getWrapperElement()
+        .addEventListener('mousedown', this.onCSharpClick)
+    }
 
     // Drawn over the scroll bar, where it shows where the changes are
     const ruler = document.createElement('div')
@@ -215,6 +266,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     this.setText()
     this.applyMode()
+    this.applyNavigationPosition()
   }
 
   public componentDidUpdate(prevProps: IIdeCodeEditorProps) {
@@ -238,10 +290,12 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       editor.setOption('styleActiveLine', !readOnly)
     }
 
-    this.previousLines?.setMode(this.props.previousLinesMode)
+    this.previousLines?.setShown(this.props.showPreviousLines)
 
     if (prevProps.path !== path || prevProps.highlight !== highlight) {
       this.applyMode()
+      this.clearSemanticMarks()
+      this.scheduleSemanticHighlight()
     }
 
     if (prevProps.path !== path || prevProps.revision !== revision) {
@@ -252,9 +306,28 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     ) {
       this.markChanges()
     }
+    if (prevProps.navigationPosition !== this.props.navigationPosition) {
+      this.applyNavigationPosition()
+    }
   }
 
   public componentWillUnmount() {
+    // Keep a just-edited file in Roslyn when switching to another source file.
+    const document = this.getCSharpDocument()
+    if (document !== null) {
+      updateCSharpDocument(document)
+    }
+    if (this.props.repositoryPath !== undefined) {
+      ipcRenderer.removeListener('csharp-refresh', this.onCSharpRefresh)
+      this.editor
+        ?.getWrapperElement()
+        .removeEventListener('mousedown', this.onCSharpClick)
+    }
+    if (this.semanticTimer !== null) {
+      window.clearTimeout(this.semanticTimer)
+    }
+    this.navigationRequestId++
+    this.clearSemanticMarks()
     if (this.rulerFrameId !== null) {
       window.cancelAnimationFrame(this.rulerFrameId)
     }
@@ -262,7 +335,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     this.modeRequestId++
     this.clearInlineChanges()
-    this.previousLines?.destroy()
+    this.previousLines?.clear()
     this.previousLines = null
     this.editor = null
     this.containerRef.current?.replaceChildren()
@@ -291,10 +364,222 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   public markSaved(generation: number) {
     this.cleanGeneration = generation
     this.updateDirty()
+    const document = this.getCSharpDocument()
+    if (document !== null) {
+      updateCSharpDocument(document)
+    }
   }
 
   public focus() {
     this.editor?.focus()
+  }
+
+  /** The current caret position, for returning after source navigation. */
+  public getCursorPosition(): ICSharpPosition | null {
+    const cursor = this.editor?.getCursor()
+    return cursor === undefined
+      ? null
+      : { line: cursor.line, character: cursor.ch }
+  }
+
+  /** Retry setup after an installation or connection failure. */
+  public retryCSharp() {
+    this.semanticFailed = false
+    this.scheduleSemanticHighlight()
+  }
+
+  private applyNavigationPosition() {
+    const position = this.props.navigationPosition
+    if (position !== undefined && this.editor !== null) {
+      this.revealLine(position.line)
+      this.editor.setCursor(CodeMirror.Pos(position.line, position.character))
+      this.editor.focus()
+    }
+  }
+
+  private getCSharpDocument(): ICSharpDocument | null {
+    const { repositoryPath, path } = this.props
+    if (
+      repositoryPath === undefined ||
+      !path.toLowerCase().endsWith('.cs') ||
+      this.editor === null
+    ) {
+      return null
+    }
+    return {
+      repositoryPath,
+      path,
+      text: this.editor.getValue('\n'),
+      isDirty: !this.editor.getDoc().isClean(this.cleanGeneration),
+    }
+  }
+
+  private clearSemanticMarks() {
+    this.semanticMarks.forEach(mark => mark.clear())
+    this.semanticMarks = []
+  }
+
+  private onCSharpRefresh = (_: unknown, repositoryPath: string) => {
+    if (repositoryPath === this.props.repositoryPath) {
+      this.scheduleSemanticHighlight()
+    }
+  }
+
+  private scheduleSemanticHighlight = () => {
+    if (
+      this.getCSharpDocument() === null ||
+      !this.props.highlight ||
+      this.semanticFailed
+    ) {
+      return
+    }
+    if (this.semanticTimer !== null) {
+      window.clearTimeout(this.semanticTimer)
+    }
+    this.semanticTimer = window.setTimeout(() => {
+      this.semanticTimer = null
+      this.highlightSemantics()
+    }, 250)
+  }
+
+  private async highlightSemantics() {
+    if (this.semanticPending) {
+      this.semanticAgain = true
+      return
+    }
+    const editor = this.editor
+    const document = this.getCSharpDocument()
+    if (editor === null || document === null || !this.props.highlight) {
+      return
+    }
+    const generation = this.semanticGeneration
+    const viewport = editor.getViewport()
+    const lastLine = Math.min(editor.lineCount() - 1, viewport.to + 20)
+    this.semanticPending = true
+    if (this.semanticMarks.length === 0) {
+      this.props.onCSharpStatus?.('C# loading…', false)
+    }
+    try {
+      const result = await highlightCSharp(document, {
+        start: { line: Math.max(0, viewport.from - 20), character: 0 },
+        end: { line: lastLine, character: editor.getLine(lastLine).length },
+      })
+      if (
+        this.editor !== editor ||
+        generation !== this.semanticGeneration ||
+        !this.props.highlight
+      ) {
+        this.semanticAgain = true
+        return
+      }
+      if (result.error !== null) {
+        this.semanticFailed = true
+        this.props.onCSharpStatus?.(result.error, true)
+        return
+      }
+      editor.operation(() => {
+        this.clearSemanticMarks()
+        for (const token of result.tokens) {
+          const className = getCSharpTokenClass(token.type)
+          if (
+            className === null ||
+            token.line >= editor.lineCount() ||
+            token.start + token.length > editor.getLine(token.line).length
+          ) {
+            continue
+          }
+          this.semanticMarks.push(
+            editor.markText(
+              CodeMirror.Pos(token.line, token.start),
+              CodeMirror.Pos(token.line, token.start + token.length),
+              { className }
+            )
+          )
+        }
+      })
+      this.props.onCSharpStatus?.('C# ready', false)
+    } catch (error) {
+      if (this.editor === editor) {
+        this.semanticFailed = true
+        this.props.onCSharpStatus?.(String(error), true)
+      }
+    } finally {
+      this.semanticPending = false
+      if (this.semanticAgain && this.editor === editor) {
+        this.semanticAgain = false
+        this.scheduleSemanticHighlight()
+      }
+    }
+  }
+
+  private onCSharpClick = (event: MouseEvent) => {
+    if (
+      !(event.ctrlKey || event.metaKey) ||
+      event.button !== 0 ||
+      !(event.target instanceof Element) ||
+      !event.target.closest('.CodeMirror-line')
+    ) {
+      return
+    }
+    const position = this.editor?.coordsChar(
+      { left: event.clientX, top: event.clientY },
+      'window'
+    )
+    if (position !== undefined) {
+      event.preventDefault()
+      this.navigate(false, position)
+    }
+  }
+
+  private async navigate(
+    references: boolean,
+    position = this.editor?.getCursor()
+  ) {
+    const document = this.getCSharpDocument()
+    const editor = this.editor
+    if (document === null || editor === null || position === undefined) {
+      return
+    }
+    const requestId = ++this.navigationRequestId
+    const generation = this.semanticGeneration
+    const origin = {
+      path: document.path,
+      position: { line: position.line, character: position.ch },
+    }
+    this.props.onCSharpStatus?.(
+      references ? 'Finding references…' : 'Finding definition…',
+      false
+    )
+    try {
+      const result = await navigateCSharp(document, origin.position, references)
+      if (
+        this.editor !== editor ||
+        requestId !== this.navigationRequestId ||
+        generation !== this.semanticGeneration
+      ) {
+        return
+      }
+      if (result.error !== null) {
+        this.props.onCSharpStatus?.(result.error, true)
+      } else if (!references && result.locations.length === 1) {
+        this.props.onCSharpStatus?.('C# ready', false)
+        this.props.onNavigate?.(result.locations[0], origin)
+      } else {
+        this.props.onCSharpStatus?.(
+          result.locations.length === 0
+            ? references
+              ? 'No references in this repository'
+              : 'No definition in this repository'
+            : 'C# ready',
+          false
+        )
+        this.props.onNavigationResults?.(result.locations, origin, references)
+      }
+    } catch (error) {
+      if (this.editor === editor && requestId === this.navigationRequestId) {
+        this.props.onCSharpStatus?.(String(error), true)
+      }
+    }
   }
 
   /** Fold all the blocks that can be folded. */
@@ -561,6 +846,9 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   private onChanges = () => {
+    this.semanticGeneration++
+    this.clearSemanticMarks()
+    this.scheduleSemanticHighlight()
     // The matches were found in the text from before
     if (this.searchQuery !== null) {
       this.clearSearch()
@@ -718,6 +1006,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     this.updateDirty()
     this.markChanges()
+    this.scheduleSemanticHighlight()
   }
 
   private async applyMode() {

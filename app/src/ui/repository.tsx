@@ -1,4 +1,5 @@
 import * as React from 'react'
+import classNames from 'classnames'
 import { Repository } from '../models/repository'
 import { Commit, CommitOneLine } from '../models/commit'
 import { TipState } from '../models/tip'
@@ -158,6 +159,14 @@ interface IRepositoryViewProps {
 interface IRepositoryViewState {
   readonly changesListScrollTop: number
   readonly compareListScrollTop: number
+
+  /**
+   * Whether the changed files of the selected commits fill the window in the
+   * History tab, in place of the sidebar with the commits. It's kept here as
+   * the sidebar is rendered here, and it's reset when switching repositories
+   * as this view is remounted for each.
+   */
+  readonly isHistoryMaximized: boolean
 }
 
 const enum Tab {
@@ -196,6 +205,7 @@ export class RepositoryView extends React.Component<
     this.state = {
       changesListScrollTop: 0,
       compareListScrollTop: 0,
+      isHistoryMaximized: false,
     }
   }
 
@@ -460,9 +470,20 @@ export class RepositoryView extends React.Component<
     this.props.dispatcher.setSidebarWidth(width)
   }
 
+  private onHistoryMaximizedChanged = (isHistoryMaximized: boolean) => {
+    this.setState({ isHistoryMaximized })
+  }
+
   private renderSidebar(): JSX.Element {
+    const hidden =
+      this.state.isHistoryMaximized &&
+      this.props.state.selectedSection === RepositorySectionTab.History
+
     return (
-      <FocusContainer onFocusWithinChanged={this.onSidebarFocusWithinChanged}>
+      <FocusContainer
+        className={classNames({ 'repository-sidebar-hidden': hidden })}
+        onFocusWithinChanged={this.onSidebarFocusWithinChanged}
+      >
         <Resizable
           id="repository-sidebar"
           width={this.props.sidebarWidth.value}
@@ -575,6 +596,8 @@ export class RepositoryView extends React.Component<
         onDiffOptionsOpened={this.onDiffOptionsOpened}
         showDragOverlay={showDragOverlay}
         accounts={this.props.accounts}
+        isMaximized={this.state.isHistoryMaximized}
+        onMaximizedChanged={this.onHistoryMaximizedChanged}
       />
     )
   }
@@ -740,6 +763,7 @@ export class RepositoryView extends React.Component<
         path={changesState.ideSelectedFilePath}
         changedFiles={changesState.workingDirectory.files}
         tabSize={this.props.selectedTabSize}
+        onSelectedPathChanged={this.onIdeSelectedPathChanged}
       />
     )
   }

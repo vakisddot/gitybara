@@ -1,5 +1,6 @@
 import * as React from 'react'
 import memoizeOne from 'memoize-one'
+import * as ipcRenderer from '../../../lib/ipc-renderer'
 
 import {
   getBoolean,
@@ -21,7 +22,8 @@ import { DiffSearchInput } from '../../diff/diff-search-input'
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { IdeCodeEditor } from './ide-code-editor'
-import { PreviousLinesMode } from './ide-previous-lines'
+import { ICSharpLocation } from '../../../lib/csharp/types'
+import { closeCSharpWorkspace } from './ide-csharp'
 import {
   IdeFileContents,
   isHighlightable,
@@ -31,8 +33,12 @@ import {
 } from './ide-file-contents'
 import { getFileIconName } from './ide-file-icons'
 import { IdeIcon } from './ide-icon'
+import { IdeKeysButton } from './ide-keys-button'
 import { getFoldRanges } from './ide-folding'
-import { getIdeShortcut } from './ide-shortcuts'
+import {
+  arePreviousLinesShownAfterRelease,
+  getIdeShortcut,
+} from './ide-shortcuts'
 import {
   getChangeGroupStarts,
   getLineChanges,
@@ -46,7 +52,6 @@ const ReloadDelay = 200
 
 const HighlightChangesKey = 'ide-highlight-changes'
 const UnchangedTextOpacityKey = 'ide-unchanged-text-opacity'
-const HoverPreviousLinesKey = 'ide-hover-previous-lines'
 
 /** Edits that weren't saved and the text of the file they were made to. */
 interface IDraft {
@@ -62,6 +67,12 @@ const unsavedDrafts = new Map<string, IDraft>()
 
 const getDraftKey = (repository: Repository, path: string) =>
   `${repository.path}\0${path}`
+
+/**
+ * Whether the previous lines were switched on, for every file and viewer until
+ * they are switched off or the app is closed. A peek doesn't change it.
+ */
+let previousLinesSwitchedOn = false
 
 /** A commit to show the file of, instead of the working directory. */
 export interface IIdeFileViewerCommit {
@@ -95,6 +106,7 @@ interface IIdeFileViewerProps {
    * and the changed files aren't looked at.
    */
   readonly commit?: IIdeFileViewerCommit
+  readonly onSelectedPathChanged?: (path: string) => void
 }
 
 interface IIdeFileViewerState {
@@ -126,11 +138,23 @@ interface IIdeFileViewerState {
 
   /** How visible unchanged text is, as a percentage */
   readonly unchangedTextOpacity: number
-  readonly previousLinesMode: PreviousLinesMode
+
+  /** Whether the lines that were removed or replaced are shown */
+  readonly showPreviousLines: boolean
 
   /** Whether the box to search the file is shown, and what it announced */
   readonly isSearching: boolean
   readonly searchMessage: string
+  readonly navigation: ICSharpLocation | null
+  readonly navigationHistory: ReadonlyArray<ICSharpLocation>
+  readonly navigationForwardHistory: ReadonlyArray<ICSharpLocation>
+  readonly navigationResults: {
+    readonly locations: ReadonlyArray<ICSharpLocation>
+    readonly origin: ICSharpLocation
+    readonly references: boolean
+  } | null
+  readonly csharpStatus: string
+  readonly csharpFailed: boolean
 }
 
 /** A file of the repository to read and edit, without any of the diff. */
@@ -145,6 +169,13 @@ export class IdeFileViewer extends React.Component<
 
   /** Flips when the search has something to announce, even if it's the same */
   private searchAnnouncementSignal = false
+
+  /** The key that shows the previous lines while it's held down */
+  private previousLinesPress: {
+    readonly key: string
+    readonly time: number
+    readonly wereShown: boolean
+  } | null = null
 
   /** What was read last, which isn't shown while there are unsaved edits */
   private latest: {
@@ -166,20 +197,27 @@ export class IdeFileViewer extends React.Component<
       changedOnDisk: false,
       saveError: null,
       highlightChanges: getBoolean(HighlightChangesKey, false),
-      previousLinesMode: getBoolean(HoverPreviousLinesKey, false)
-        ? 'hover'
-        : 'ghost',
+      showPreviousLines: previousLinesSwitchedOn,
       unchangedTextOpacity: Math.max(
         0,
         Math.min(100, getNumber(UnchangedTextOpacityKey, 100))
       ),
       isSearching: false,
       searchMessage: '',
+      navigation: null,
+      navigationHistory: [],
+      navigationForwardHistory: [],
+      navigationResults: null,
+      csharpStatus: '',
+      csharpFailed: false,
     }
   }
 
   public componentDidMount() {
     document.addEventListener('keydown', this.onKeyDown)
+    document.addEventListener('keyup', this.onKeyUp)
+    window.addEventListener('blur', this.onWindowBlur)
+    ipcRenderer.on('navigate-source', this.onNativeNavigation)
 
     // The Find menu item, see app.tsx
     document.addEventListener('find-text', this.showSearch)
@@ -189,7 +227,10 @@ export class IdeFileViewer extends React.Component<
 
   public getSnapshotBeforeUpdate(prevProps: IIdeFileViewerProps) {
     // The editor still has the text of the previous file, keep the edits
-    if (prevProps.path !== this.props.path) {
+    if (
+      prevProps.path !== this.props.path ||
+      prevProps.repository.path !== this.props.repository.path
+    ) {
       this.keepUnsavedEdits(prevProps.repository, prevProps.path)
     }
 
@@ -197,8 +238,14 @@ export class IdeFileViewer extends React.Component<
   }
 
   public componentDidUpdate(prevProps: IIdeFileViewerProps) {
+    const changedRepository =
+      prevProps.repository.path !== this.props.repository.path
+    if (changedRepository && prevProps.onSelectedPathChanged !== undefined) {
+      closeCSharpWorkspace(prevProps.repository.path)
+    }
     if (
       prevProps.path !== this.props.path ||
+      changedRepository ||
       prevProps.commit?.sha !== this.props.commit?.sha
     ) {
       // Don't keep showing the previous file while the new one is read
@@ -214,6 +261,20 @@ export class IdeFileViewer extends React.Component<
         saveError: null,
         isSearching: false,
         searchMessage: '',
+        csharpStatus: '',
+        csharpFailed: false,
+        navigationResults: null,
+        navigation:
+          !changedRepository && this.state.navigation?.path === this.props.path
+            ? this.state.navigation
+            : null,
+        navigationHistory: changedRepository
+          ? []
+          : this.state.navigationHistory,
+        navigationForwardHistory:
+          !changedRepository && this.state.navigation?.path === this.props.path
+            ? this.state.navigationForwardHistory
+            : [],
       })
       this.loadContents()
     } else if (prevProps.commit?.diff !== this.props.commit?.diff) {
@@ -228,9 +289,15 @@ export class IdeFileViewer extends React.Component<
 
   public componentWillUnmount() {
     document.removeEventListener('keydown', this.onKeyDown)
+    document.removeEventListener('keyup', this.onKeyUp)
+    window.removeEventListener('blur', this.onWindowBlur)
+    ipcRenderer.removeListener('navigate-source', this.onNativeNavigation)
     document.removeEventListener('find-text', this.showSearch)
     this.unmounted = true
     this.keepUnsavedEdits(this.props.repository, this.props.path)
+    if (this.props.onSelectedPathChanged !== undefined) {
+      closeCSharpWorkspace(this.props.repository.path)
+    }
 
     if (this.reloadTimeoutId !== null) {
       window.clearTimeout(this.reloadTimeoutId)
@@ -537,8 +604,70 @@ export class IdeFileViewer extends React.Component<
           event.preventDefault()
         }
         break
+      case 'previous-lines':
+        if (this.pressPreviousLinesKey(event)) {
+          event.preventDefault()
+        }
+        break
     }
   }
+
+  /** Show the previous lines while the key is down, when there are any. */
+  private pressPreviousLinesKey(event: KeyboardEvent) {
+    if (this.state.lineChanges.previousLines.length === 0) {
+      return false
+    }
+
+    // A key that is held repeats. A press that is still going on is one that
+    // wasn't seen to end, so it goes on from where that one started.
+    if (!event.repeat) {
+      this.previousLinesPress = {
+        key: event.key.toLowerCase(),
+        time: event.timeStamp,
+        wereShown:
+          this.previousLinesPress?.wereShown ?? this.state.showPreviousLines,
+      }
+      this.setState({ showPreviousLines: true })
+    }
+
+    return true
+  }
+
+  private onKeyUp = (event: KeyboardEvent) => {
+    const press = this.previousLinesPress
+
+    // macOS doesn't tell when a key that is pressed with Cmd is let go
+    if (
+      press !== null &&
+      (event.key.toLowerCase() === press.key ||
+        event.key === 'Meta' ||
+        event.key === 'Control')
+    ) {
+      this.releasePreviousLinesKey(event.timeStamp - press.time)
+    }
+  }
+
+  /** The key can't be seen to be let go once the window has lost the focus. */
+  private onWindowBlur = () => this.releasePreviousLinesKey(Infinity)
+
+  private releasePreviousLinesKey(heldFor: number) {
+    const press = this.previousLinesPress
+
+    if (press !== null) {
+      this.previousLinesPress = null
+      this.switchPreviousLines(
+        arePreviousLinesShownAfterRelease(press.wereShown, heldFor)
+      )
+    }
+  }
+
+  private switchPreviousLines(shown: boolean) {
+    previousLinesSwitchedOn = shown
+    this.setState({ showPreviousLines: shown })
+  }
+
+  private onTogglePreviousLines = () =>
+    this.switchPreviousLines(!this.state.showPreviousLines)
 
   /** Show the box to search the file, when there is text to search in. */
   private showSearch = () => {
@@ -591,17 +720,154 @@ export class IdeFileViewer extends React.Component<
   }
 
   private onPreviousChange = () => this.goToChange(-1)
-  private onPreviousLinesModeChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const previousLinesMode =
-      event.currentTarget.value === 'hover' ? 'hover' : 'ghost'
-    setBoolean(HoverPreviousLinesKey, previousLinesMode === 'hover')
-    this.setState({ previousLinesMode })
-  }
   private onNextChange = () => this.goToChange(1)
   private onFoldAll = () => this.editorRef.current?.foldAll()
   private onUnfoldAll = () => this.editorRef.current?.unfoldAll()
+
+  private onCSharpStatus = (csharpStatus: string, csharpFailed: boolean) => {
+    if (!this.unmounted) {
+      this.setState({ csharpStatus, csharpFailed })
+    }
+  }
+
+  private onRetryCSharp = () => this.editorRef.current?.retryCSharp()
+
+  private onNavigate = (
+    navigation: ICSharpLocation,
+    origin: ICSharpLocation
+  ) => {
+    this.setState(state => ({
+      navigation,
+      navigationHistory: [...state.navigationHistory, origin],
+      navigationForwardHistory: [],
+      navigationResults: null,
+    }))
+    this.props.onSelectedPathChanged?.(navigation.path)
+  }
+
+  private onNavigationBack = () => this.navigateHistory('back')
+
+  private onNavigationForward = () => this.navigateHistory('forward')
+
+  private onNativeNavigation = (
+    _: Electron.IpcRendererEvent,
+    direction: 'back' | 'forward'
+  ) => {
+    if (
+      this.props.onSelectedPathChanged !== undefined &&
+      this.props.commit === undefined
+    ) {
+      this.navigateHistory(direction)
+    }
+  }
+
+  private navigateHistory(direction: 'back' | 'forward') {
+    const { navigationHistory, navigationForwardHistory } = this.state
+    const history =
+      direction === 'back' ? navigationHistory : navigationForwardHistory
+    const navigation = history[history.length - 1]
+    if (navigation === undefined) {
+      return
+    }
+    const { path } = this.props
+    const position = this.editorRef.current?.getCursorPosition()
+    const current =
+      path !== null &&
+      this.state.contentsPath === path &&
+      position !== undefined &&
+      position !== null
+        ? { path, position }
+        : this.state.navigation?.path === path
+        ? this.state.navigation
+        : null
+    const otherHistory =
+      direction === 'back' ? navigationForwardHistory : navigationHistory
+    const returnHistory =
+      current === null ? otherHistory : [...otherHistory, current]
+    this.setState({
+      navigation,
+      navigationHistory:
+        direction === 'back' ? history.slice(0, -1) : returnHistory,
+      navigationForwardHistory:
+        direction === 'forward' ? history.slice(0, -1) : returnHistory,
+      navigationResults: null,
+    })
+    this.props.onSelectedPathChanged?.(navigation.path)
+  }
+
+  private onNavigationResults = (
+    locations: ReadonlyArray<ICSharpLocation>,
+    origin: ICSharpLocation,
+    references: boolean
+  ) =>
+    this.setState({
+      navigationResults:
+        locations.length === 0 ? null : { locations, origin, references },
+    })
+
+  private onCloseNavigationResults = () =>
+    this.setState({ navigationResults: null })
+
+  private onNavigationResultClick = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    const results = this.state.navigationResults
+    const location =
+      results?.locations[Number(event.currentTarget.dataset.index)]
+    if (results !== null && location !== undefined) {
+      this.onNavigate(location, results.origin)
+    }
+  }
+
+  private hasCSharpSupport(path: string) {
+    return (
+      this.props.commit === undefined &&
+      this.props.onSelectedPathChanged !== undefined &&
+      path.toLowerCase().endsWith('.cs')
+    )
+  }
+
+  private renderNavigationResults() {
+    const results = this.state.navigationResults
+    if (results === null) {
+      return null
+    }
+    return (
+      <section
+        className="ide-csharp-results"
+        aria-label={results.references ? 'References' : 'Definitions'}
+      >
+        <div className="ide-csharp-results-header">
+          <strong>
+            {results.references ? 'References' : 'Definitions'} (
+            {results.locations.length})
+          </strong>
+          <Button
+            onClick={this.onCloseNavigationResults}
+            ariaLabel="Close navigation results"
+          >
+            Close
+          </Button>
+        </div>
+        <ul>
+          {results.locations.map((location, index) => (
+            <li
+              key={`${location.path}:${location.position.line}:${location.position.character}`}
+            >
+              <button
+                className="button-component"
+                type="button"
+                data-index={index}
+                onClick={this.onNavigationResultClick}
+              >
+                {location.path}:{location.position.line + 1}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
 
   private renderChangeNavigation() {
     const lines = this.getLines()
@@ -640,6 +906,19 @@ export class IdeFileViewer extends React.Component<
         >
           <Octicon symbol={octicons.paintbrush} />
         </Button>
+        {this.state.lineChanges.previousLines.length > 0 && (
+          <Button
+            className="ide-file-viewer-header-button"
+            onClick={this.onTogglePreviousLines}
+            ariaPressed={this.state.showPreviousLines}
+            tooltip={`Show previous lines (F or ${
+              __DARWIN__ ? 'Cmd' : 'Ctrl'
+            }+', hold to peek)`}
+            ariaLabel="Show previous lines"
+          >
+            <Octicon symbol={octicons.diffRemoved} />
+          </Button>
+        )}
         <label className="ide-file-viewer-opacity">
           <span>Unchanged</span>
           <input
@@ -656,17 +935,6 @@ export class IdeFileViewer extends React.Component<
             {this.state.unchangedTextOpacity}%
           </span>
         </label>
-        {this.state.lineChanges.previousLines.length > 0 && (
-          <select
-            className="ide-file-viewer-previous-mode"
-            aria-label="Previous lines display"
-            value={this.state.previousLinesMode}
-            onChange={this.onPreviousLinesModeChange}
-          >
-            <option value="ghost">Ghost lines</option>
-            <option value="hover">Hover preview</option>
-          </select>
-        )}
       </div>
     )
   }
@@ -709,6 +977,28 @@ export class IdeFileViewer extends React.Component<
 
     return (
       <div className="header">
+        {this.props.onSelectedPathChanged !== undefined && (
+          <div className="ide-file-viewer-header-buttons">
+            <Button
+              className="ide-file-viewer-header-button"
+              onClick={this.onNavigationBack}
+              disabled={this.state.navigationHistory.length === 0}
+              tooltip="Go back (Alt+Left / Mouse4)"
+              ariaLabel="Go back"
+            >
+              <Octicon symbol={octicons.arrowLeft} />
+            </Button>
+            <Button
+              className="ide-file-viewer-header-button"
+              onClick={this.onNavigationForward}
+              disabled={this.state.navigationForwardHistory.length === 0}
+              tooltip="Go forward (Alt+Right / Mouse5)"
+              ariaLabel="Go forward"
+            >
+              <Octicon symbol={octicons.arrowRight} />
+            </Button>
+          </div>
+        )}
         <IdeIcon name={getFileIconName(path)} />
         <span className="ide-file-viewer-path">
           <PathText path={path} />
@@ -731,6 +1021,21 @@ export class IdeFileViewer extends React.Component<
         )}
         {this.renderChangeNavigation()}
         {this.renderFoldButtons()}
+        {this.hasCSharpSupport(path) && this.state.csharpStatus !== '' && (
+          <span className="ide-csharp-status" role="status">
+            {this.state.csharpFailed
+              ? 'C# unavailable'
+              : this.state.csharpStatus}
+          </span>
+        )}
+        {this.getLines() !== null && (
+          <div className="ide-file-viewer-header-buttons">
+            <IdeKeysButton
+              canEdit={!this.isEditorReadOnly()}
+              canNavigate={this.hasCSharpSupport(path)}
+            />
+          </div>
+        )}
         {status !== undefined && (
           <Octicon
             symbol={iconForStatus(status)}
@@ -799,6 +1104,14 @@ export class IdeFileViewer extends React.Component<
     return (
       <>
         {this.renderBanners(isDeleted)}
+        {this.hasCSharpSupport(path) && this.state.csharpFailed && (
+          <div className="ide-file-viewer-banner">
+            <span className="ide-file-viewer-banner-text">
+              {this.state.csharpStatus}
+            </span>
+            <Button onClick={this.onRetryCSharp}>Retry C#</Button>
+          </div>
+        )}
         <div className="ide-file-viewer-lines">
           {this.state.isSearching && (
             <>
@@ -824,10 +1137,25 @@ export class IdeFileViewer extends React.Component<
             readOnly={isDeleted || this.props.readOnly === true}
             highlightChanges={this.state.highlightChanges}
             unchangedTextOpacity={this.state.unchangedTextOpacity}
-            previousLinesMode={this.state.previousLinesMode}
+            showPreviousLines={this.state.showPreviousLines}
             lineChanges={lineChanges}
             onDirtyChange={this.onDirtyChange}
             onSave={this.onSave}
+            repositoryPath={
+              !isDeleted && this.hasCSharpSupport(path)
+                ? this.props.repository.path
+                : undefined
+            }
+            navigationPosition={
+              this.state.navigation?.path === path
+                ? this.state.navigation.position
+                : undefined
+            }
+            onNavigate={this.onNavigate}
+            onNavigationBack={this.onNavigationBack}
+            onNavigationForward={this.onNavigationForward}
+            onNavigationResults={this.onNavigationResults}
+            onCSharpStatus={this.onCSharpStatus}
           />
         </div>
       </>
@@ -878,6 +1206,7 @@ export class IdeFileViewer extends React.Component<
       <div className="diff-container ide-file-viewer">
         {this.renderHeader(path)}
         {this.renderBody(path)}
+        {this.renderNavigationResults()}
       </div>
     )
   }

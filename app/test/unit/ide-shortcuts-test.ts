@@ -2,8 +2,10 @@ import { afterEach, describe, it } from 'node:test'
 import assert from 'node:assert'
 
 import {
+  arePreviousLinesShownAfterRelease,
   getIdeShortcut,
   IdeShortcut,
+  PreviousLinesHoldDelay,
 } from '../../src/ui/changes/ide/ide-shortcuts'
 
 const attached = new Array<Element>()
@@ -133,10 +135,75 @@ describe('getIdeShortcut', () => {
     assert.strictEqual(press(document.body, 'F', modifier), 'find')
 
     assert.strictEqual(press(document.body, 'f', other), null)
-    assert.strictEqual(press(document.body, 'f', {}), null)
+    assert.notStrictEqual(press(document.body, 'f', {}), 'find')
     assert.strictEqual(
       press(document.body, 'f', { ...modifier, shiftKey: true }),
       null
+    )
+  })
+
+  it('shows the previous lines with F where letters are not typed', () => {
+    assert.strictEqual(press(document.body, 'f'), 'previous-lines')
+    assert.strictEqual(press(document.body, 'F'), 'previous-lines')
+    assert.strictEqual(press(create('button'), 'f'), 'previous-lines')
+
+    assert.strictEqual(press(create('input'), 'f'), null)
+    assert.strictEqual(press(document.body, 'f', { shiftKey: true }), null)
+    assert.strictEqual(press(document.body, 'f', { altKey: true }), null)
+  })
+
+  it('leaves F to the editor when it can be edited', () => {
+    const editor = create('div')
+    editor.className = 'ide-code-editor'
+    const input = create('textarea', editor)
+
+    assert.strictEqual(press(input, 'f', {}, false), null)
+    assert.strictEqual(press(input, 'f', {}, true), 'previous-lines')
+  })
+
+  it("shows the previous lines with Ctrl+', or Cmd+' on macOS, wherever the focus is", () => {
+    const modifier = __DARWIN__ ? { metaKey: true } : { ctrlKey: true }
+    const other = __DARWIN__ ? { ctrlKey: true } : { metaKey: true }
+
+    const editor = create('div')
+    editor.className = 'ide-code-editor'
+    const input = create('textarea', editor)
+
+    assert.strictEqual(press(document.body, "'", modifier), 'previous-lines')
+    assert.strictEqual(press(input, "'", modifier, false), 'previous-lines')
+    assert.strictEqual(press(create('input'), "'", modifier), 'previous-lines')
+
+    assert.strictEqual(press(document.body, "'", other), null)
+    assert.strictEqual(press(document.body, "'", {}), null)
+    assert.strictEqual(
+      press(document.body, "'", { ...modifier, shiftKey: true }),
+      null
+    )
+  })
+})
+
+describe('arePreviousLinesShownAfterRelease', () => {
+  it('switches the previous lines on or off with a tap', () => {
+    assert.strictEqual(arePreviousLinesShownAfterRelease(false, 0), true)
+    assert.strictEqual(
+      arePreviousLinesShownAfterRelease(false, PreviousLinesHoldDelay - 1),
+      true
+    )
+    assert.strictEqual(arePreviousLinesShownAfterRelease(true, 0), false)
+  })
+
+  it('only shows them while the key is held for longer', () => {
+    assert.strictEqual(
+      arePreviousLinesShownAfterRelease(false, PreviousLinesHoldDelay),
+      false
+    )
+    assert.strictEqual(
+      arePreviousLinesShownAfterRelease(true, PreviousLinesHoldDelay),
+      true
+    )
+    assert.strictEqual(
+      arePreviousLinesShownAfterRelease(false, Infinity),
+      false
     )
   })
 })

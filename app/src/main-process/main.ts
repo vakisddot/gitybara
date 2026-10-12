@@ -40,6 +40,7 @@ import { createAuthenticatedImageTokenResolver } from './authenticated-image-tok
 import { installAliveOriginFilter } from './alive-origin-filter'
 import { installSameOriginFilter } from './same-origin-filter'
 import * as ipcMain from './ipc-main'
+import { installCSharpHandlers } from './csharp'
 import {
   getArchitecture,
   isAppRunningUnderARM64Translation,
@@ -331,6 +332,7 @@ app.on('ready', () => {
   }
 
   readyTime = now() - launchTime
+  installCSharpHandlers()
 
   possibleProtocols.forEach(protocol => setAsDefaultProtocolClient(protocol))
 

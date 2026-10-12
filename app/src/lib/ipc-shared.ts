@@ -17,6 +17,13 @@ import { DesktopNotificationPermission } from 'desktop-notifications'
 import { NotificationCallback } from 'desktop-notifications'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
+import {
+  ICSharpDocument,
+  ICSharpHighlightResult,
+  ICSharpNavigationResult,
+  ICSharpPosition,
+  ICSharpRange,
+} from './csharp/types'
 
 /**
  * Defines the simplex IPC channel names we use from the renderer
@@ -25,6 +32,9 @@ import { CLIAction } from './cli-action'
  * the two over the untyped IPC framework.
  */
 export type RequestChannels = {
+  'csharp-close': (repositoryPath: string) => void
+  'csharp-update': (document: ICSharpDocument) => void
+  'csharp-refresh': (repositoryPath: string) => void
   'select-all-window-contents': () => void
   'dialog-did-open': () => void
   'update-menu-state': (
@@ -66,6 +76,7 @@ export type RequestChannels = {
   ) => void
   focus: () => void
   blur: () => void
+  'navigate-source': (direction: 'back' | 'forward') => void
   'update-accounts': (accounts: ReadonlyArray<EndpointToken>) => void
   'resolve-image-token': (
     requestId: number,
@@ -104,6 +115,15 @@ export type RequestChannels = {
  * Return signatures must be promises
  */
 export type RequestResponseChannels = {
+  'csharp-highlight': (
+    document: ICSharpDocument,
+    range: ICSharpRange
+  ) => Promise<ICSharpHighlightResult>
+  'csharp-navigate': (
+    document: ICSharpDocument,
+    position: ICSharpPosition,
+    references: boolean
+  ) => Promise<ICSharpNavigationResult>
   'get-path': (path: PathType) => Promise<string>
   'get-app-architecture': () => Promise<Architecture>
   'get-app-path': () => Promise<string>

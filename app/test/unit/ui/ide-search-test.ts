@@ -45,7 +45,7 @@ const props: React.ComponentProps<typeof IdeCodeEditor> = {
   lineChanges: NoLineChanges,
   highlightChanges: false,
   unchangedTextOpacity: 100,
-  previousLinesMode: 'ghost',
+  showPreviousLines: false,
   onDirtyChange: () => {},
   onSave: () => {},
 }

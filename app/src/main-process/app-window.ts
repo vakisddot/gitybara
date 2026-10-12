@@ -205,6 +205,17 @@ export class AppWindow {
       ipcWebContents.send(this.window.webContents, 'blur')
     )
 
+    // Electron exposes the mouse side buttons as native browser commands.
+    this.window.on('app-command', (_, command) => {
+      if (command === 'browser-backward' || command === 'browser-forward') {
+        ipcWebContents.send(
+          this.window.webContents,
+          'navigate-source',
+          command === 'browser-backward' ? 'back' : 'forward'
+        )
+      }
+    })
+
     registerWindowStateChangedEvents(this.window)
 
     // We want to have the locale country code available in the renderer on load

@@ -11,6 +11,12 @@
 
   > .focus-container {
     display: flex;
+
+    // Hidden, not removed, so the commit list keeps its state while the
+    // changed files of a commit fill the window
+    &.repository-sidebar-hidden {
+      display: none;
+    }
   }
 
   #no-changes {

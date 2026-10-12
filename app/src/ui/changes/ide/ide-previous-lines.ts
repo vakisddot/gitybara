@@ -3,35 +3,64 @@ import 'codemirror/addon/runmode/runmode'
 
 import { IPreviousLineBlock } from './ide-line-changes'
 
-export type PreviousLinesMode = 'ghost' | 'hover'
-
 const PreviousLinesGutter = 'ide-previous-lines-gutter'
+
+/** How long the old lines take to open or close, in milliseconds */
+const ExpandDuration = 300
 
 interface IPreview {
   readonly block: IPreviousLineBlock
   readonly handle: CodeMirror.LineHandle
   readonly above: boolean
-  expanded: boolean
   widget?: CodeMirror.LineWidget
+  node?: HTMLElement
 }
 
-/** Old code is display-only: widgets and gutter markers never enter the document. */
+/** Where the line that is read is on the screen, to keep it there */
+interface IReadLine {
+  readonly line: number
+
+  /** From the top of the screen to the top of the line, in pixels */
+  readonly offset: number
+}
+
+/** The old lines that are drawn opening or closing */
+interface IExpansion {
+  /** The blocks that are drawn, and how high they are when open */
+  readonly blocks: ReadonlyArray<{
+    readonly preview: IPreview
+    readonly height: number
+  }>
+  readonly readLine: IReadLine
+
+  /** How far open the blocks are, from 0 to 1 */
+  progress: number
+
+  /** Whether they are opening, otherwise closing */
+  opening: boolean
+  time: number
+  frameId: number
+}
+
+/**
+ * The lines that were removed or replaced. While they are hidden, the gutter
+ * counts them where they were, and they are shown all at once.
+ *
+ * Old code is display-only: widgets and gutter markers never enter the document.
+ */
 export class IdePreviousLines {
   private blocks: ReadonlyArray<IPreviousLineBlock> | null = null
   private previews: IPreview[] = []
-  private mode: PreviousLinesMode = 'ghost'
-  private popup: HTMLDivElement | null = null
-  private popupMarker: HTMLButtonElement | null = null
-  private pinned = false
-  private closeTimeout: number | null = null
+  private shown = false
 
-  public constructor(
-    private readonly editor: CodeMirror.Editor,
-    private readonly container: HTMLElement
-  ) {
-    editor.on('scroll', this.closePopup)
-    editor.on('update', this.exposeHoverMarkers)
-    window.addEventListener('resize', this.closePopup)
+  private expansion: IExpansion | null = null
+
+  /** The widths the old lines were last lined up with, in pixels */
+  private gutterWidth = -1
+  private lineNumberWidth = -1
+
+  public constructor(private readonly editor: CodeMirror.Editor) {
+    editor.on('update', this.lineUpWithGutter)
   }
 
   public setBlocks(blocks: ReadonlyArray<IPreviousLineBlock>) {
@@ -46,236 +75,256 @@ export class IdePreviousLines {
       block,
       handle: this.editor.getLineHandle(Math.min(block.line, count - 1)),
       above: block.line < count,
-      expanded: false,
     }))
     this.refresh()
   }
 
-  public setMode(mode: PreviousLinesMode) {
-    if (this.mode !== mode) {
-      this.mode = mode
+  /**
+   * Show or hide the previous lines. The blocks on the screen grow open and
+   * shrink closed, unless the system asks for less motion. What is above the
+   * line that is read stays where it is, so they open and close at that line.
+   */
+  public setShown(shown: boolean) {
+    if (this.shown === shown) {
+      return
+    }
+
+    this.shown = shown
+
+    // It turns around from where it is
+    if (this.expansion !== null) {
+      this.expansion.opening = shown
+      return
+    }
+
+    const readLine = this.getReadLine()
+
+    if (shown) {
       this.refresh()
     }
+
+    // The blocks that aren't drawn are already where they end up
+    const blocks = this.previews.flatMap(preview =>
+      preview.node?.isConnected === true
+        ? [{ preview, height: preview.node.offsetHeight }]
+        : []
+    )
+
+    if (!isMotionWanted() || blocks.length === 0) {
+      if (!shown) {
+        this.refresh()
+      }
+      this.keepInPlace(readLine)
+      return
+    }
+
+    const expansion: IExpansion = {
+      blocks,
+      readLine,
+      progress: shown ? 0 : 1,
+      opening: shown,
+      time: performance.now(),
+      frameId: 0,
+    }
+    this.expansion = expansion
+    this.drawExpansion(expansion)
+    expansion.frameId = requestAnimationFrame(this.onExpansionFrame)
   }
 
   /** Also called when the syntax mode or tab width changes. */
   public refresh() {
-    this.closePopup()
+    this.stopExpansion()
     this.editor.operation(() => {
       this.clearPresentation()
+
+      // The gutter stays while the lines are shown, so the text doesn't move
+      // sideways when they are shown or hidden
       const gutters = (this.editor.getOption('gutters') ?? []).filter(
         gutter => gutter !== PreviousLinesGutter
       )
-      if (this.mode === 'hover' && this.previews.length > 0) {
+      if (this.previews.length > 0) {
         gutters.push(PreviousLinesGutter)
       }
       this.editor.setOption('gutters', gutters)
+
+      // Lines removed before and after the last line are counted together
+      const hiddenCounts = new Map<CodeMirror.LineHandle, number>()
 
       for (const preview of this.previews) {
         // The handle follows edits; a removed anchor no longer has a preview.
         if (this.editor.getLineNumber(preview.handle) === null) {
           continue
         }
-        if (this.mode === 'ghost') {
-          this.addGhost(preview)
+
+        if (this.shown) {
+          this.addWidget(preview)
         } else {
-          this.addHoverMarker(preview)
+          hiddenCounts.set(
+            preview.handle,
+            (hiddenCounts.get(preview.handle) ?? 0) + preview.block.lines.length
+          )
         }
+      }
+
+      for (const [handle, count] of hiddenCounts) {
+        this.editor.setGutterMarker(
+          handle,
+          PreviousLinesGutter,
+          createCount(count)
+        )
       }
     })
   }
 
   public clear() {
-    this.closePopup()
+    this.stopExpansion()
     this.editor.operation(() => this.clearPresentation())
     this.blocks = null
     this.previews = []
-  }
-
-  public destroy() {
-    this.clear()
-    this.editor.off('scroll', this.closePopup)
-    this.editor.off('update', this.exposeHoverMarkers)
-    window.removeEventListener('resize', this.closePopup)
   }
 
   private clearPresentation() {
     for (const preview of this.previews) {
       preview.widget?.clear()
       preview.widget = undefined
+      preview.node = undefined
     }
     this.editor.clearGutter(PreviousLinesGutter)
   }
 
-  private exposeHoverMarkers = () => {
-    // CodeMirror hides gutter wrappers from assistive technology by default.
-    for (const markers of this.container.querySelectorAll(
-      '.ide-previous-lines-markers'
-    )) {
-      const wrapper = markers.closest('.CodeMirror-gutter-wrapper')
-      wrapper?.removeAttribute('aria-hidden')
-      for (const element of wrapper?.children ?? []) {
-        if (!element.contains(markers)) {
-          element.setAttribute('aria-hidden', 'true')
-        }
-      }
+  private onExpansionFrame = () => {
+    const expansion = this.expansion
+
+    if (expansion === null) {
+      return
+    }
+
+    const now = performance.now()
+    const step = (now - expansion.time) / ExpandDuration
+    expansion.time = now
+    expansion.progress = expansion.opening
+      ? Math.min(1, expansion.progress + step)
+      : Math.max(0, expansion.progress - step)
+
+    if (expansion.progress === (expansion.opening ? 1 : 0)) {
+      this.endExpansion(expansion)
+    } else {
+      this.drawExpansion(expansion)
+      expansion.frameId = requestAnimationFrame(this.onExpansionFrame)
     }
   }
 
-  private addGhost(preview: IPreview) {
-    const node = document.createElement('div')
-    node.className = 'ide-previous-lines-ghost'
-    const toggle = document.createElement('button')
-    toggle.type = 'button'
-    toggle.className = 'ide-previous-lines-toggle'
-    const rows = document.createElement('div')
-    const update = () => {
-      toggle.textContent = `${
-        preview.expanded ? '▾ Hide' : '▸ Show'
-      } ${lineLabel(preview.block)}`
-      toggle.setAttribute('aria-expanded', String(preview.expanded))
-      rows.replaceChildren()
-      if (preview.expanded) {
-        rows.appendChild(this.createRows(preview.block))
+  /** The blocks are as high as they are open, and fade in as they open. */
+  private drawExpansion({ blocks, progress, readLine }: IExpansion) {
+    const eased = easeInOut(progress)
+
+    for (const { preview, height } of blocks) {
+      const style = preview.node?.style
+      if (style !== undefined) {
+        style.overflow = 'hidden'
+        style.height = `${height * eased}px`
+        style.opacity = String(eased)
       }
     }
-    toggle.addEventListener('click', () => {
-      preview.expanded = !preview.expanded
-      update()
-      preview.widget?.changed()
-    })
-    update()
-    node.append(toggle, rows)
+
+    // CodeMirror measures them again, to know where the lines below them go
+    this.editor.operation(() =>
+      blocks.forEach(({ preview }) => preview.widget?.changed())
+    )
+    this.keepInPlace(readLine)
+  }
+
+  private endExpansion(expansion: IExpansion) {
+    this.stopExpansion()
+
+    if (expansion.opening) {
+      for (const { preview } of expansion.blocks) {
+        preview.node?.style.removeProperty('overflow')
+        preview.node?.style.removeProperty('height')
+        preview.node?.style.removeProperty('opacity')
+      }
+      this.editor.operation(() =>
+        expansion.blocks.forEach(({ preview }) => preview.widget?.changed())
+      )
+    } else {
+      this.refresh()
+    }
+
+    this.keepInPlace(expansion.readLine)
+  }
+
+  /** The blocks stay as they are drawn, for what is done to them next */
+  private stopExpansion() {
+    if (this.expansion !== null) {
+      cancelAnimationFrame(this.expansion.frameId)
+      this.expansion = null
+    }
+  }
+
+  private keepInPlace({ line, offset }: IReadLine) {
+    this.editor.scrollTo(
+      null,
+      this.editor.heightAtLine(line, 'local', true) - offset
+    )
+  }
+
+  /**
+   * The old lines are drawn over the gutter, so their numbers and text start
+   * where those of the lines of the file do. The widths of the gutter are given
+   * to the styles, as they change with the number of lines and the gutters.
+   */
+  private lineUpWithGutter = () => {
+    const gutters = this.editor.getGutterElement()
+    const gutterWidth = gutters.offsetWidth
+    const lineNumberWidth =
+      gutters.querySelector<HTMLElement>('.CodeMirror-linenumbers')
+        ?.offsetWidth ?? 0
+
+    if (
+      gutterWidth === this.gutterWidth &&
+      lineNumberWidth === this.lineNumberWidth
+    ) {
+      return
+    }
+
+    this.gutterWidth = gutterWidth
+    this.lineNumberWidth = lineNumberWidth
+    const { style } = this.editor.getWrapperElement()
+    style.setProperty('--ide-gutter-width', `${gutterWidth}px`)
+    style.setProperty('--ide-line-number-width', `${lineNumberWidth}px`)
+  }
+
+  /**
+   * The line that is read and where it is: the one with the cursor while it's on
+   * the screen, otherwise the one a third of the way down, where a jump to a
+   * change puts it.
+   */
+  private getReadLine(): IReadLine {
+    const editor = this.editor
+    const { top, clientHeight } = editor.getScrollInfo()
+    const cursor = editor.getCursor().line
+    const cursorTop = editor.heightAtLine(cursor, 'local')
+    const line =
+      cursorTop >= top && cursorTop < top + clientHeight
+        ? cursor
+        : editor.lineAtHeight(top + clientHeight / 3, 'local')
+
+    return { line, offset: editor.heightAtLine(line, 'local', true) - top }
+  }
+
+  private addWidget(preview: IPreview) {
+    const node = document.createElement('div')
+    node.className = 'ide-previous-lines-block'
+    node.setAttribute('role', 'group')
+    node.setAttribute('aria-label', linesLabel(preview.block.lines.length))
+    node.appendChild(this.createRows(preview.block))
+    preview.node = node
+    // The text scrolls sideways with the text of the file, and old lines that
+    // are longer than all of those make the file scroll further
     preview.widget = this.editor.addLineWidget(preview.handle, node, {
       above: preview.above,
       coverGutter: true,
-      noHScroll: true,
     })
-  }
-
-  private addHoverMarker(preview: IPreview) {
-    const marker = document.createElement('button')
-    marker.type = 'button'
-    marker.className = 'ide-previous-lines-marker'
-    marker.textContent = '−'
-    marker.setAttribute('aria-label', `Preview ${lineLabel(preview.block)}`)
-    marker.setAttribute('aria-haspopup', 'dialog')
-    marker.addEventListener('mouseenter', () => this.showPopup(preview, marker))
-    marker.addEventListener('focus', () => this.showPopup(preview, marker))
-    marker.addEventListener('mouseleave', this.scheduleClose)
-    marker.addEventListener('blur', this.scheduleClose)
-    marker.addEventListener('click', () => {
-      this.showPopup(preview, marker)
-      this.pinPopup()
-    })
-    const existing = this.editor.lineInfo(preview.handle)?.gutterMarkers?.[
-      PreviousLinesGutter
-    ]
-    if (existing) {
-      existing.appendChild(marker)
-    } else {
-      const markers = document.createElement('div')
-      markers.className = 'ide-previous-lines-markers'
-      markers.appendChild(marker)
-      this.editor.setGutterMarker(preview.handle, PreviousLinesGutter, markers)
-    }
-  }
-
-  private showPopup(preview: IPreview, marker: HTMLButtonElement) {
-    this.cancelClose()
-    if (this.popupMarker === marker || this.pinned) {
-      return
-    }
-    this.closePopup()
-    const popup = document.createElement('div')
-    popup.className = 'ide-previous-lines-popup cm-s-default'
-    popup.setAttribute('role', 'dialog')
-    popup.setAttribute('aria-label', lineLabel(preview.block))
-    const header = document.createElement('div')
-    header.className = 'ide-previous-lines-popup-header'
-    const title = document.createElement('span')
-    title.textContent = lineLabel(preview.block)
-    const pin = document.createElement('button')
-    pin.type = 'button'
-    pin.textContent = 'Keep open'
-    pin.addEventListener('click', () => this.pinPopup())
-    const close = document.createElement('button')
-    close.type = 'button'
-    close.textContent = 'Close'
-    close.addEventListener('click', this.closePopup)
-    header.append(title, pin, close)
-    popup.append(header, this.createRows(preview.block))
-    popup.addEventListener('mouseenter', this.cancelClose)
-    popup.addEventListener('mouseleave', this.scheduleClose)
-    popup.addEventListener('focusin', this.cancelClose)
-    popup.addEventListener('focusout', this.scheduleClose)
-    this.container.appendChild(popup)
-    this.popup = popup
-    document.addEventListener('keydown', this.onKeyDown)
-    this.popupMarker = marker
-    marker.setAttribute('aria-expanded', 'true')
-
-    const bounds = this.container.getBoundingClientRect()
-    const anchor = marker.getBoundingClientRect()
-    popup.style.left = `${Math.max(
-      4,
-      Math.min(
-        anchor.right - bounds.left + 8,
-        bounds.width - popup.offsetWidth - 4
-      )
-    )}px`
-    popup.style.top = `${Math.max(
-      4,
-      Math.min(anchor.top - bounds.top, bounds.height - popup.offsetHeight - 4)
-    )}px`
-  }
-
-  private pinPopup() {
-    this.pinned = true
-    this.cancelClose()
-    const button = this.popup?.querySelector('button')
-    if (button !== null && button !== undefined) {
-      button.textContent = 'Kept open'
-      button.disabled = true
-    }
-  }
-
-  private cancelClose = () => {
-    if (this.closeTimeout !== null) {
-      window.clearTimeout(this.closeTimeout)
-      this.closeTimeout = null
-    }
-  }
-
-  private scheduleClose = () => {
-    this.cancelClose()
-    if (!this.pinned) {
-      this.closeTimeout = window.setTimeout(() => {
-        if (!this.popup?.contains(document.activeElement)) {
-          this.closePopup()
-        }
-      }, 250)
-    }
-  }
-
-  private closePopup = () => {
-    this.cancelClose()
-    document.removeEventListener('keydown', this.onKeyDown)
-    this.popup?.remove()
-    this.popup = null
-    this.popupMarker?.setAttribute('aria-expanded', 'false')
-    this.popupMarker = null
-    this.pinned = false
-  }
-
-  private onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && this.popup !== null) {
-      // Focus before closing, so the marker's focus handler cannot reopen it.
-      this.popupMarker?.focus()
-      this.closePopup()
-      event.preventDefault()
-      event.stopPropagation()
-    }
   }
 
   private createRows(block: IPreviousLineBlock): HTMLElement {
@@ -287,6 +336,8 @@ export class IdePreviousLines {
     const codeNodes = block.lines.map((_, i) => {
       const row = document.createElement('div')
       row.className = 'ide-previous-line'
+      const gutter = document.createElement('span')
+      gutter.className = 'ide-previous-line-gutter'
       const lineNumber = document.createElement('span')
       lineNumber.className = 'ide-previous-line-number'
       lineNumber.textContent = String(block.oldLineNumber + i)
@@ -294,9 +345,10 @@ export class IdePreviousLines {
       minus.className = 'ide-previous-line-minus'
       minus.textContent = '−'
       minus.setAttribute('aria-hidden', 'true')
+      gutter.append(lineNumber, minus)
       const code = document.createElement('code')
       code.style.tabSize = String(this.editor.getOption('tabSize'))
-      row.append(lineNumber, minus, code)
+      row.append(gutter, code)
       rows.appendChild(row)
       return code
     })
@@ -344,8 +396,28 @@ export class IdePreviousLines {
   }
 }
 
-function lineLabel(block: IPreviousLineBlock): string {
-  return `${block.lines.length} previous ${
-    block.lines.length === 1 ? 'line' : 'lines'
-  }`
+/** Slow at the start and the end, from 0 to 1 */
+function easeInOut(progress: number): number {
+  return progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2
+}
+
+/** Whether to animate, as the system can ask for less motion */
+function isMotionWanted(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+/** The number of hidden lines, in the gutter where they were. */
+function createCount(count: number): HTMLElement {
+  const marker = document.createElement('div')
+  marker.className = 'ide-previous-lines-count'
+  marker.textContent = `−${count}`
+  marker.title = linesLabel(count)
+  return marker
+}
+
+function linesLabel(count: number): string {
+  return `${count} previous ${count === 1 ? 'line' : 'lines'}`
 }

@@ -105,6 +105,14 @@ interface ISelectedCommitsProps {
   readonly isContiguous: boolean
 
   readonly accounts: ReadonlyArray<Account>
+
+  /**
+   * Whether the changed files and their diff fill the window, with the commit
+   * list and the summary of the commit hidden. The commit list is outside of
+   * this component, so the one that renders it owns the value.
+   */
+  readonly isMaximized: boolean
+  readonly onMaximizedChanged: (isMaximized: boolean) => void
 }
 
 interface ISelectedCommitsState {
@@ -151,8 +159,26 @@ export class SelectedCommits extends React.Component<
     }
   }
 
+  public componentDidUpdate() {
+    // The button to leave is in the list of files, so don't stay maximized
+    // when there is none, for example after the selected commits changed.
+    if (this.props.isMaximized && !this.isShowingFiles) {
+      this.props.onMaximizedChanged(false)
+    }
+  }
+
   public componentWillUnmount() {
     this.loadChangedFilesScheduler.clear()
+  }
+
+  private get isShowingFiles() {
+    const { selectedCommits, isContiguous, changesetData } = this.props
+
+    return (
+      selectedCommits.length > 0 &&
+      (selectedCommits.length === 1 || isContiguous) &&
+      changesetData.files.length > 0
+    )
   }
 
   private renderDiff() {
@@ -252,6 +278,10 @@ export class SelectedCommits extends React.Component<
   }
 
   private renderCommitSummary(commits: ReadonlyArray<Commit>) {
+    if (this.props.isMaximized) {
+      return null
+    }
+
     return (
       <ExpandableCommitSummary
         selectedCommits={commits}
@@ -350,6 +380,9 @@ export class SelectedCommits extends React.Component<
   private renderFileHeader() {
     const fileCount = this.props.changesetData.files.length
     const filesPlural = fileCount === 1 ? 'file' : 'files'
+    const maximizeLabel = this.props.isMaximized
+      ? 'Exit full screen'
+      : 'Show full screen'
     return (
       <div className="file-list-header">
         <span className="file-list-count">
@@ -377,9 +410,27 @@ export class SelectedCommits extends React.Component<
             <Octicon symbol={octicons.fileDirectory} />
           </Button>
         </div>
+        <div className="history-files-view-toggle">
+          <Button
+            onClick={this.onMaximizeClick}
+            ariaLabel={maximizeLabel}
+            tooltip={maximizeLabel}
+          >
+            <Octicon
+              symbol={
+                this.props.isMaximized
+                  ? octicons.screenNormal
+                  : octicons.screenFull
+              }
+            />
+          </Button>
+        </div>
       </div>
     )
   }
+
+  private onMaximizeClick = () =>
+    this.props.onMaximizedChanged(!this.props.isMaximized)
 
   private onFlatListViewClick = () => this.setFilesTreeView(false)
   private onTreeViewClick = () => this.setFilesTreeView(true)

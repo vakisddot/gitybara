@@ -20,6 +20,9 @@ describe('IPC channel contract', () => {
     : never
 
   const expectedRequestChannels = [
+    'csharp-close',
+    'csharp-update',
+    'csharp-refresh',
     'select-all-window-contents',
     'dialog-did-open',
     'update-menu-state',
@@ -48,6 +51,7 @@ describe('IPC channel contract', () => {
     'certificate-error',
     'focus',
     'blur',
+    'navigate-source',
     'update-accounts',
     'resolve-image-token',
     'resolved-image-token',
@@ -74,6 +78,8 @@ describe('IPC channel contract', () => {
   ] as const
 
   const expectedResponseChannels = [
+    'csharp-highlight',
+    'csharp-navigate',
     'get-path',
     'get-app-architecture',
     'get-app-path',
