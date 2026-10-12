@@ -12,7 +12,9 @@ A fork of GitHub Desktop (Electron, TypeScript, React), renamed Gitybara. Read
 - Rebuild after changing the product name (`app/package.json`) or the executable name
   (`getWindowsIdentifierName()` in `script/dist-info.ts`). The dev build is named from
   these, so an old build no longer matches.
-- `build:dev` deletes everything in `dist` first.
+- `build:dev` deletes everything in `dist` first. `build:prod` and `package` do too, which removes
+  the dev build. After either, `yarn start` exits with code 1 ("Couldn't launch the app") until
+  you run the `Rebuild` profile again.
 - The dev server uses port 3000. Only one copy can run, so stop the app before starting it again.
 
 ## Checking changes
