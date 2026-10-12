@@ -135,19 +135,25 @@ export function getDistArchitecture(): 'arm64' | 'x64' {
   return 'x64'
 }
 
-export function getUpdatesURL() {
-  // It is also possible to use a `x64/` path, but for now we'll leave the
-  // original URL without architecture in it (which will still work for
-  // compatibility reasons) in case anything goes wrong until we have everything
-  // sorted out.
-  const architecturePath = getDistArchitecture() === 'arm64' ? 'arm64/' : ''
-  return `https://central.github.com/api/deployments/desktop/desktop/${architecturePath}latest?version=${version}&env=${getChannel()}`
+/**
+ * The Squirrel feed the app checks for updates, or undefined when there is
+ * none. Gitybara has no update service yet, so auto-update stays off unless
+ * DESKTOP_UPDATES_URL is set. GitHub Desktop's own feed must not be used here:
+ * it would offer GitHub Desktop builds as updates.
+ */
+export function getUpdatesURL(): string | undefined {
+  return process.env.DESKTOP_UPDATES_URL || undefined
 }
 
 export function shouldMakeDelta() {
-  // Only production and beta channels include deltas. Test releases aren't
-  // necessarily sequential so deltas wouldn't make sense.
-  return ['production', 'beta'].includes(getChannel())
+  // Deltas are built against the previous release published at the updates URL,
+  // so there is nothing to build them from without one. Only production and
+  // beta channels include deltas. Test releases aren't necessarily sequential
+  // so deltas wouldn't make sense.
+  return (
+    getUpdatesURL() !== undefined &&
+    ['production', 'beta'].includes(getChannel())
+  )
 }
 
 /**

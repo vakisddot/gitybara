@@ -67,6 +67,13 @@ const LegacyStatsEndpoint = 'https://central.github.com/api/usage/desktop'
 const StatsEndpoint =
   'https://cafe.github.com/twirp/clientappsfe.observability.v1.TelemetryAPI/RecordEvents'
 
+/**
+ * Whether usage stats are reported. Both endpoints above belong to GitHub
+ * Desktop and Gitybara has none of its own, so nothing is sent. Turn this on
+ * once Gitybara has an endpoint to point them at.
+ */
+export const isUsageReportingEnabled = false
+
 /** The URL to the stats samples page. */
 export const SamplesURL =
   'https://github.com/desktop/desktop/blob/development/docs/process/usage-data.md'
@@ -700,7 +707,7 @@ export class StatsStore implements IStatsStore {
     accounts: ReadonlyArray<Account>,
     repositories: ReadonlyArray<Repository>
   ) {
-    if (this.optOut) {
+    if (this.optOut || !isUsageReportingEnabled) {
       return
     }
 
@@ -735,7 +742,7 @@ export class StatsStore implements IStatsStore {
     accounts: ReadonlyArray<Account>,
     repositories: ReadonlyArray<Repository>
   ): Promise<boolean> {
-    if (this.optOut) {
+    if (this.optOut || !isUsageReportingEnabled) {
       return false
     }
 
@@ -1429,6 +1436,10 @@ export class StatsStore implements IStatsStore {
     optOut: boolean,
     previousValue: boolean | undefined
   ): Promise<void> {
+    if (!isUsageReportingEnabled) {
+      return
+    }
+
     // The analytics pipeline expects us to submit `optIn` but we track `optOut`
     // so we need to invert the value before we send it.
     const optIn = !optOut

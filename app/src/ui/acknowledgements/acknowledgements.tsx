@@ -6,8 +6,8 @@ import { Loading } from '../lib/loading'
 import { LinkButton } from '../lib/link-button'
 import { Dialog, DialogContent, DefaultDialogFooter } from '../dialog'
 
-const WebsiteURL = 'https://desktop.github.com'
-const RepositoryURL = 'https://github.com/desktop/desktop'
+const UpstreamURL = 'https://github.com/desktop/desktop'
+const RepositoryURL = 'https://github.com/vakisddot/gitybara'
 
 interface IAcknowledgementsProps {
   /** The function to call when the dialog should be dismissed. */
@@ -121,15 +121,15 @@ export class Acknowledgements extends React.Component<
       >
         <DialogContent>
           <p>
-            <LinkButton uri={WebsiteURL}>GitHub Desktop</LinkButton> is an open
-            source project published under the MIT License. You can view the
-            source code and contribute to this project on{' '}
+            Gitybara is an open source project published under the MIT License,
+            built on <LinkButton uri={UpstreamURL}>GitHub Desktop</LinkButton>.
+            You can view the source code and contribute to this project on{' '}
             <LinkButton uri={RepositoryURL}>GitHub</LinkButton>.
           </p>
 
           {desktopLicense}
 
-          <p>GitHub Desktop also distributes these libraries:</p>
+          <p>Gitybara also distributes these libraries:</p>
 
           {licenses ? this.renderLicenses(licenses) : <Loading />}
         </DialogContent>

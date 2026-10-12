@@ -106,18 +106,14 @@ function getExtraErrorContext(): Record<string, string> {
 /** Extra argument for the protocol launcher on Windows */
 const protocolLauncherArg = '--protocol-launcher'
 
-const possibleProtocols = new Set(['x-github-client'])
-if (__DEV_SECRETS__) {
-  possibleProtocols.add('x-github-desktop-dev-auth')
-} else {
-  possibleProtocols.add('x-github-desktop-auth')
-}
-// Also support Desktop Classic's protocols.
-if (__DARWIN__) {
-  possibleProtocols.add('github-mac')
-} else if (__WIN32__) {
-  possibleProtocols.add('github-windows')
-}
+// Only the OAuth callback is registered. GitHub Desktop's own `x-github-client`
+// ("Open with GitHub Desktop"), `github-mac` and `github-windows` links, and its
+// `x-github-desktop-auth` callback, stay with GitHub Desktop so the two apps
+// don't fight over them. Builds that use GitHub's shared development OAuth app
+// have to keep its callback scheme.
+const possibleProtocols = new Set([
+  __DEV_SECRETS__ ? 'x-github-desktop-dev-auth' : 'x-gitybara-auth',
+])
 
 // Match the Squirrel identity so taskbar grouping and notifications use Gitybara.
 if (__WIN32__) {

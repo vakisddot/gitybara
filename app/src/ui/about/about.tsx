@@ -230,24 +230,6 @@ export class About extends React.Component<IAboutProps> {
     return null
   }
 
-  private renderBetaLink() {
-    if (__RELEASE_CHANNEL__ === 'beta') {
-      return
-    }
-
-    return (
-      <div>
-        <p className="no-padding">Looking for the latest features?</p>
-        <p className="no-padding">
-          Check out the{' '}
-          <LinkButton uri="https://desktop.github.com/beta">
-            Beta Channel
-          </LinkButton>
-        </p>
-      </div>
-    )
-  }
-
   public render() {
     const name = this.props.applicationName
     const version = this.props.applicationVersion
@@ -284,7 +266,6 @@ export class About extends React.Component<IAboutProps> {
           </p>
           {this.renderUpdateDetails()}
           {this.renderUpdateButton()}
-          {this.renderBetaLink()}
           <div className="terms-and-license-container">
             <p className="no-padding terms-and-license">
               <LinkButton onClick={this.props.onShowTermsAndConditions}>

@@ -47,8 +47,8 @@ declare const __RELEASE_CHANNEL__:
   | 'test'
   | 'development'
 
-/** The URL for Squirrel's updates. */
-declare const __UPDATES_URL__: string
+/** The URL for Squirrel's updates, or undefined when updates are disabled. */
+declare const __UPDATES_URL__: string | undefined
 
 /** The URL for fatal exception reports. */
 declare const __ERROR_REPORTING_ENDPOINT__: string | undefined

@@ -2,7 +2,7 @@ import * as React from 'react'
 import { DialogContent } from '../dialog'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { LinkButton } from '../lib/link-button'
-import { SamplesURL } from '../../lib/stats'
+import { SamplesURL, isUsageReportingEnabled } from '../../lib/stats'
 import { isWindowsOpenSSHAvailable } from '../../lib/ssh/ssh'
 
 interface IAdvancedPreferencesProps {
@@ -111,18 +111,20 @@ export class Advanced extends React.Component<
             </p>
           </div>
         </div>
-        <div className="advanced-section">
-          <h2>Usage</h2>
-          <Checkbox
-            label={this.reportDesktopUsageLabel()}
-            value={
-              this.state.optOutOfUsageTracking
-                ? CheckboxValue.Off
-                : CheckboxValue.On
-            }
-            onChange={this.onReportingOptOutChanged}
-          />
-        </div>
+        {isUsageReportingEnabled && (
+          <div className="advanced-section">
+            <h2>Usage</h2>
+            <Checkbox
+              label={this.reportDesktopUsageLabel()}
+              value={
+                this.state.optOutOfUsageTracking
+                  ? CheckboxValue.Off
+                  : CheckboxValue.On
+              }
+              onChange={this.onReportingOptOutChanged}
+            />
+          </div>
+        )}
         <h2>Network and credentials</h2>
         {this.renderSSHSettings()}
         <div className="advanced-section">

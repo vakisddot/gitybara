@@ -1,19 +1,18 @@
 {
   "name": "desktop",
   "productName": "Gitybara",
-  "bundleID": "com.github.GitHubClient",
-  "companyName": "GitHub, Inc.",
+  "bundleID": "io.github.vakisddot.gitybara",
+  "companyName": "Gitybara",
   "version": "3.6.7-beta3",
   "main": "./main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/desktop/desktop.git"
+    "url": "https://github.com/vakisddot/gitybara.git"
   },
-  "description": "Simple collaboration from your desktop",
+  "description": "Review changes, browse files and edit code in one Git app",
   "author": {
-    "name": "GitHub, Inc.",
-    "email": "opensource+desktop@github.com",
-    "url": "https://desktop.github.com/"
+    "name": "Gitybara contributors",
+    "url": "https://github.com/vakisddot/gitybara"
   },
   "license": "MIT",
   "dependencies": {

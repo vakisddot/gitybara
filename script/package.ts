@@ -89,7 +89,8 @@ function packageWindows() {
     process.exit(1)
   }
 
-  const iconUrl = 'https://desktop.githubusercontent.com/app-icon.ico'
+  const iconUrl =
+    'https://raw.githubusercontent.com/vakisddot/gitybara/development/app/static/logos/prod/icon-logo.ico'
 
   const nugetPkgName = getWindowsIdentifierName()
   const options: electronInstaller.Options = {
@@ -106,8 +107,9 @@ function packageWindows() {
     setupMsi: getWindowsInstallerName(),
   }
 
-  if (shouldMakeDelta()) {
-    const url = new URL(getUpdatesURL())
+  const updatesURL = getUpdatesURL()
+  if (shouldMakeDelta() && updatesURL !== undefined) {
+    const url = new URL(updatesURL)
     // Make sure Squirrel.Windows isn't affected by partially or completely
     // disabled releases.
     url.searchParams.set('bypassStaggeredRelease', '1')

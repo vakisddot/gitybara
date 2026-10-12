@@ -1,2 +1,7 @@
 export { StatsDatabase, ILaunchStats } from './stats-database'
-export { StatsStore, IStatsStore, SamplesURL } from './stats-store'
+export {
+  StatsStore,
+  IStatsStore,
+  SamplesURL,
+  isUsageReportingEnabled,
+} from './stats-store'

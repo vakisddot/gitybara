@@ -25,6 +25,10 @@ environment variables:
  - `DESKTOP_OAUTH_CLIENT_ID`
  - `DESKTOP_OAUTH_CLIENT_SECRET`
 
+Gitybara's callback URL is `x-gitybara-auth://oauth`. Builds that use the bundled
+development app keep GitHub's `x-github-desktop-dev-auth` callback instead. See
+[releasing.md](releasing.md) for the release secrets.
+
 ## Short-lived credentials (preview)
 
 Development builds and builds started with `GITHUB_DESKTOP_PREVIEW_FEATURES=1`

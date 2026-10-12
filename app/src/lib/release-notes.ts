@@ -89,12 +89,21 @@ export function getReleaseSummary(
   }
 }
 
+/**
+ * Where to fetch the changelog from. GitHub Desktop's changelog lists its own
+ * releases, which don't apply to Gitybara, so there is none until Gitybara
+ * publishes one and this points at it.
+ */
+const changelogEndpoint: string | undefined = undefined
+
 export async function getChangeLog(
   limit?: number
 ): Promise<ReadonlyArray<ReleaseMetadata>> {
-  const changelogURL = new URL(
-    'https://central.github.com/deployments/desktop/desktop/changelog.json'
-  )
+  if (changelogEndpoint === undefined) {
+    return []
+  }
+
+  const changelogURL = new URL(changelogEndpoint)
 
   if (__RELEASE_CHANNEL__ === 'beta' || __RELEASE_CHANNEL__ === 'test') {
     changelogURL.searchParams.set('env', __RELEASE_CHANNEL__)
