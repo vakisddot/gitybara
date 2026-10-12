@@ -30,6 +30,8 @@ For now they are Windows x64 only and unsigned, so Windows SmartScreen shows an
    attached. Review it on the Releases page, then publish it. A version with a
    suffix, like `0.1.0-beta1`, is marked as a pre-release.
 
+Publishing is what ships the update. See [Auto-update](#auto-update).
+
 To try the build without releasing, run the workflow by hand from the Actions
 tab. It uploads the installers as a workflow artifact only.
 
@@ -37,15 +39,33 @@ To build locally, run `build:prod` and then `package`. The installer lands in
 `dist/`. Both delete what is already in `dist/`, including the dev build, so
 run the `Rebuild` profile again afterwards before `yarn start`.
 
+## Auto-update
+
+The app uses the Squirrel.Windows updater from GitHub Desktop. The release
+workflow builds it with `DESKTOP_UPDATES_URL` set to
+`https://github.com/<repo>/releases/latest/download`, so the app asks GitHub for
+the `RELEASES` file of the latest published release and downloads the `.nupkg`
+it lists. The app checks in the background, shows an "update available" banner,
+and has "Check for updates" in the About dialog.
+
+- **Only published releases count.** Drafts are invisible to `latest/download`.
+  So are pre-releases, which is any version with a suffix like `-beta1`.
+- **Keep the file names.** `RELEASES` lists the `.nupkg` by the name Squirrel
+  gave it, so `script/package.ts` must not rename it.
+- **No deltas.** Every update downloads the full package, about 260 MB. Deltas
+  need `DESKTOP_UPDATES_URL` set when packaging too, and a published release to
+  build them from.
+- **A build without the URL never updates.** Local builds don't set it, so they
+  don't check for updates. The `0.1.0` and `0.1.1` releases were built without
+  it, so install a newer one by hand once.
+- **Testing it needs two published releases.** Install the older one, publish
+  the newer one, then use "Check for updates" in About.
+
 ## What is switched off
 
 Gitybara has no servers of its own yet, so these are off rather than pointing at
 GitHub Desktop's:
 
-- **Auto-update.** Set `DESKTOP_UPDATES_URL` at build time to a Squirrel feed to
-  turn it on. Until then users download new versions from the Releases page.
-  The update code also expects some behaviour from GitHub's own update service
-  (staggered releases, an ARM64 path), so test it against the new feed first.
 - **Usage stats.** `isUsageReportingEnabled` in
   [`stats-store.ts`](../../app/src/lib/stats/stats-store.ts) is `false`, and the
   checkbox in Preferences is hidden.

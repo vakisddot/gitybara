@@ -15,14 +15,11 @@ import {
   isPublishable,
   getBundleSizes,
   getDistRoot,
-  getDistArchitecture,
   getIconDirectory,
 } from './dist-info'
 import { isGitHubActions } from './build-platforms'
 import { existsSync, rmSync, writeFileSync } from 'fs'
-import { getVersion } from '../app/package-info'
 import { computeBundleHashSync } from '../app/src/lib/compute-bundle-hash'
-import { rename } from 'fs/promises'
 import { join } from 'path'
 import { assertNonNullable } from '../app/src/lib/fatal-error'
 
@@ -139,23 +136,9 @@ function packageWindows() {
   console.log('Packaging for Windows…')
   electronInstaller
     .createWindowsInstaller(options)
+    // The nuget packages keep the names Squirrel.Windows gave them. Its RELEASES
+    // file lists them by name, so renaming them would break the update feed.
     .then(() => console.log(`Installers created in ${outputDir}`))
-    .then(async () => {
-      // electron-winstaller (more specifically Squirrel.Windows) doesn't let
-      // us control the name of the nuget packages but we want them to include
-      // the architecture similar to how the setup exe and msi do so we'll just
-      // have to rename them here after the fact.
-      const arch = getDistArchitecture()
-      const prefix = `${getWindowsIdentifierName()}-${getVersion()}`
-
-      for (const kind of shouldMakeDelta() ? ['full', 'delta'] : ['full']) {
-        const from = join(outputDir, `${prefix}-${kind}.nupkg`)
-        const to = join(outputDir, `${prefix}-${arch}-${kind}.nupkg`)
-
-        console.log(`Renaming ${from} to ${to}`)
-        await rename(from, to)
-      }
-    })
     .catch(e => {
       console.error(`Error packaging: ${e}`)
       process.exit(1)

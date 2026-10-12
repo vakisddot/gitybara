@@ -37,9 +37,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           arch: x64
+      # The app checks the latest published release for updates. The URL is only
+      # set for the build, not for packaging, so no delta packages are made.
       - name: Build production app
         run: yarn build:prod
         env:
+          DESKTOP_UPDATES_URL:
+            https://github.com/${{ github.repository }}/releases/latest/download
           DESKTOP_OAUTH_CLIENT_ID: ${{ secrets.DESKTOP_OAUTH_CLIENT_ID }}
           DESKTOP_OAUTH_CLIENT_SECRET:
             ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET }}
