@@ -33,6 +33,7 @@ export type MenuIDs =
   | 'new-repository'
   | 'add-local-repository'
   | 'clone-repository'
+  | 'import-github-desktop'
   | 'about'
   | 'create-pull-request'
   | 'compare-to-branch'

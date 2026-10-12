@@ -78,6 +78,7 @@ describe('IPC channel contract', () => {
   ] as const
 
   const expectedResponseChannels = [
+    'read-github-desktop-repositories',
     'csharp-highlight',
     'csharp-navigate',
     'get-path',

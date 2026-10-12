@@ -17,6 +17,7 @@ import { DesktopNotificationPermission } from 'desktop-notifications'
 import { NotificationCallback } from 'desktop-notifications'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
+import { IGitHubDesktopRepository } from './github-desktop-import'
 import {
   ICSharpDocument,
   ICSharpHighlightResult,
@@ -115,6 +116,9 @@ export type RequestChannels = {
  * Return signatures must be promises
  */
 export type RequestResponseChannels = {
+  'read-github-desktop-repositories': () => Promise<
+    ReadonlyArray<IGitHubDesktopRepository>
+  >
   'csharp-highlight': (
     document: ICSharpDocument,
     range: ICSharpRange

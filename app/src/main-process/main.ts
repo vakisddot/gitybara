@@ -41,6 +41,7 @@ import { installAliveOriginFilter } from './alive-origin-filter'
 import { installSameOriginFilter } from './same-origin-filter'
 import * as ipcMain from './ipc-main'
 import { installCSharpHandlers } from './csharp'
+import { installGitHubDesktopImportHandler } from './github-desktop-import'
 import {
   getArchitecture,
   isAppRunningUnderARM64Translation,
@@ -329,6 +330,7 @@ app.on('ready', () => {
 
   readyTime = now() - launchTime
   installCSharpHandlers()
+  installGitHubDesktopImportHandler()
 
   possibleProtocols.forEach(protocol => setAsDefaultProtocolClient(protocol))
 

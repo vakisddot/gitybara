@@ -56,6 +56,7 @@ export enum PopupType {
   OpenWithExternalEditor = 'OpenWithExternalEditor',
   OpenShellFailed = 'OpenShellFailed',
   InitializeLFS = 'InitializeLFS',
+  ImportFromGitHubDesktop = 'ImportFromGitHubDesktop',
   LFSAttributeMismatch = 'LFSAttributeMismatch',
   UpstreamAlreadyExists = 'UpstreamAlreadyExists',
   ReleaseNotes = 'ReleaseNotes',
@@ -236,6 +237,7 @@ export type PopupDetail =
     }
   | { type: PopupType.OpenShellFailed; message: string }
   | { type: PopupType.InitializeLFS; repositories: ReadonlyArray<Repository> }
+  | { type: PopupType.ImportFromGitHubDesktop }
   | { type: PopupType.LFSAttributeMismatch }
   | {
       type: PopupType.UpstreamAlreadyExists

@@ -129,6 +129,14 @@ export function buildDefaultMenuTemplate({
         accelerator: 'CmdOrCtrl+Shift+O',
         click: emit('clone-repository'),
       },
+      separator,
+      {
+        label: __DARWIN__
+          ? 'Import from GitHub Desktop…'
+          : 'Import from &GitHub Desktop…',
+        id: 'import-github-desktop',
+        click: emit('import-github-desktop'),
+      },
     ],
   }
 

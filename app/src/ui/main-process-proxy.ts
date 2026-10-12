@@ -234,6 +234,12 @@ export const setWindowZoomFactor = sendProxy('set-window-zoom-factor', 1)
 /** Tell the main process to check for app updates */
 export const checkForUpdates = invokeProxy('check-for-updates', 1)
 
+/** Read the repository list from GitHub Desktop's data on this computer. */
+export const readGitHubDesktopRepositories = invokeProxy(
+  'read-github-desktop-repositories',
+  0
+)
+
 /** Tell the main process to quit the app and install updates */
 export const quitAndInstallUpdate = sendProxy('quit-and-install-updates', 0)
 

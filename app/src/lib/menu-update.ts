@@ -137,6 +137,7 @@ const allMenuIds: ReadonlyArray<MenuIDs> = [
   'new-repository',
   'add-local-repository',
   'clone-repository',
+  'import-github-desktop',
   'about',
   'create-pull-request',
   'preview-pull-request',
@@ -415,6 +416,7 @@ function getInWelcomeFlowBuilder(inWelcomeFlow: boolean): MenuStateBuilder {
     'new-repository',
     'add-local-repository',
     'clone-repository',
+    'import-github-desktop',
     'preferences',
     'about',
   ]

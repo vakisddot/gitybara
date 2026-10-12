@@ -102,6 +102,7 @@ import { CLIInstalled } from './cli-installed'
 import { GenericGitAuthentication } from './generic-git-auth'
 import { ShellError } from './shell'
 import { InitializeLFS, AttributeMismatch } from './lfs'
+import { ImportFromGitHubDesktop } from './import-github-desktop/import-github-desktop'
 import { UpstreamAlreadyExists } from './upstream-already-exists'
 import { ReleaseNotes } from './release-notes'
 import { DeletePullRequest } from './delete-branch/delete-pull-request-dialog'
@@ -472,6 +473,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.chooseRepository()
       case 'add-local-repository':
         return this.showAddLocalRepo()
+      case 'import-github-desktop':
+        return this.showImportFromGitHubDesktop()
       case 'create-branch':
         return this.showCreateBranch()
       case 'show-branches':
@@ -835,6 +838,12 @@ export class App extends React.Component<IAppProps, IAppState> {
 
   private showAddLocalRepo = () => {
     return this.props.dispatcher.showPopup({ type: PopupType.AddRepository })
+  }
+
+  private showImportFromGitHubDesktop = () => {
+    return this.props.dispatcher.showPopup({
+      type: PopupType.ImportFromGitHubDesktop,
+    })
   }
 
   private showCreateRepository = () => {
@@ -2102,6 +2111,17 @@ export class App extends React.Component<IAppProps, IAppState> {
             message={popup.message}
             onDismissed={onPopupDismissedFn}
             showPreferencesDialog={this.onShowIntegrationsPreferences}
+          />
+        )
+      case PopupType.ImportFromGitHubDesktop:
+        return (
+          <ImportFromGitHubDesktop
+            key="import-github-desktop"
+            dispatcher={this.props.dispatcher}
+            repositories={this.state.repositories.filter(
+              (r): r is Repository => r instanceof Repository
+            )}
+            onDismissed={onPopupDismissedFn}
           />
         )
       case PopupType.InitializeLFS:
