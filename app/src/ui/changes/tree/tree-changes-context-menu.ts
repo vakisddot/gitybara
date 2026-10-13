@@ -1,9 +1,9 @@
 import * as Path from 'path'
-import { clipboard } from 'electron'
 
 import { revealInFileManager } from '../../../lib/app-shell'
 import { IMenuItem } from '../../../lib/menu-item'
 import { Repository } from '../../../models/repository'
+import { writeClipboardText } from '../../main-process-proxy'
 import {
   AppFileStatusKind,
   WorkingDirectoryFileChange,
@@ -59,7 +59,7 @@ function getCopyFolderPathMenuItem(
     label: CopyFolderPathLabel,
     action: () => {
       const fullPath = Path.join(repository.path, directoryPath)
-      clipboard.writeText(fullPath)
+      writeClipboardText(fullPath)
     },
   }
 }
@@ -67,7 +67,7 @@ function getCopyFolderPathMenuItem(
 function getCopyRelativeFolderPathMenuItem(directoryPath: string): IMenuItem {
   return {
     label: CopyRelativeFolderPathLabel,
-    action: () => clipboard.writeText(Path.normalize(directoryPath)),
+    action: () => writeClipboardText(Path.normalize(directoryPath)),
   }
 }
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert'
+import * as Path from 'path'
 import { afterEach, describe, it } from 'node:test'
 
 import { DiffSelection, DiffSelectionType } from '../../src/models/diff'
@@ -223,7 +224,7 @@ describe('getTreeDirectoryContextMenu', () => {
       )
       copyItem?.action?.()
 
-      assert.deepStrictEqual(capture.writes, ['/tmp/repo/src/ui'])
+      assert.deepStrictEqual(capture.writes, [Path.join('/tmp/repo', 'src/ui')])
     })
 
     it('copies the repository-relative folder path', () => {
@@ -234,7 +235,7 @@ describe('getTreeDirectoryContextMenu', () => {
       )
       copyItem?.action?.()
 
-      assert.deepStrictEqual(capture.writes, ['src/ui'])
+      assert.deepStrictEqual(capture.writes, [Path.normalize('src/ui')])
     })
   })
 })
