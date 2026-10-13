@@ -164,7 +164,7 @@ export class Appearance extends React.Component<
         )
       case ApplicationTheme.CatppuccinMocha:
         return (
-          <span title="Catppuccin Mocha">
+          <span>
             <img src={catppuccinMochaThemeImage} alt="" />
             <span className="theme-value-label">Mocha</span>
           </span>

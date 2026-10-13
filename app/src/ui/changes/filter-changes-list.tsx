@@ -369,6 +369,11 @@ export class FilterChangesList extends React.Component<
     }
   )
 
+  private getTreeFilePathsFromItems = memoizeOne(
+    (items: ReadonlyArray<IChangesListItem>): ReadonlyArray<string> =>
+      items.map(item => item.change.path)
+  )
+
   public constructor(props: IFilterChangesListProps) {
     super(props)
 
@@ -1285,11 +1290,6 @@ export class FilterChangesList extends React.Component<
       ),
     }))
   }
-
-  private getTreeFilePathsFromItems = memoizeOne(
-    (items: ReadonlyArray<IChangesListItem>): ReadonlyArray<string> =>
-      items.map(item => item.change.path)
-  )
 
   private getAllTreeFilePaths() {
     return this.getTreeFilePathsFromItems(this.state.groups[0]?.items ?? [])

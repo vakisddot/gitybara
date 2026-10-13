@@ -155,7 +155,7 @@ export async function readCommitFileContents(
       await getBlobContents(repository, sha, path),
       false
     )
-  } catch (e) {
+  } catch {
     // Not in the commit, which is the case for a file it deleted
   }
 
@@ -164,7 +164,7 @@ export async function readCommitFileContents(
       await getBlobContents(repository, `${sha}^`, path),
       true
     )
-  } catch (e) {
+  } catch {
     return { kind: 'missing' }
   }
 }
@@ -200,7 +200,7 @@ export async function readIdeFileContents(
   try {
     const committed = await getBlobContents(repository, 'HEAD', path)
     return decodeFileContents(committed, true)
-  } catch (e) {
+  } catch {
     return { kind: 'missing' }
   }
 }

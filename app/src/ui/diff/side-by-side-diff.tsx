@@ -261,6 +261,17 @@ export class SideBySideDiff extends React.Component<
     IRowSelectableGroupStaticData
   >()
 
+  /** The width of a tab character, as read when the diff was last drawn. */
+  private tabSize = 4
+
+  /** How many columns one level of indentation is, going by the whole diff. */
+  private getIndentUnit = memoize((diff: ITextDiff, tabSize: number) =>
+    detectIndentUnit(
+      diff.hunks.flatMap(hunk => hunk.lines.map(line => line.content)),
+      tabSize
+    )
+  )
+
   public constructor(props: ISideBySideDiffProps) {
     super(props)
 
@@ -859,17 +870,6 @@ export class SideBySideDiff extends React.Component<
     this.rowSelectableGroupStaticDataCache.set(hunkStartLine, data)
     return data
   }
-
-  /** The width of a tab character, as read when the diff was last drawn. */
-  private tabSize = 4
-
-  /** How many columns one level of indentation is, going by the whole diff. */
-  private getIndentUnit = memoize((diff: ITextDiff, tabSize: number) =>
-    detectIndentUnit(
-      diff.hunks.flatMap(hunk => hunk.lines.map(line => line.content)),
-      tabSize
-    )
-  )
 
   private renderRow = ({ index, parent, style, key }: ListRowProps) => {
     const { diff } = this.state

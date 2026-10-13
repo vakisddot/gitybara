@@ -183,6 +183,17 @@ export class IdeFileViewer extends React.Component<
     readonly lineChanges: ILineChanges
   } | null = null
 
+  private getChangeStarts = memoizeOne(getChangeGroupStarts)
+
+  private getFoldRangeCount = memoizeOne(
+    (lines: ReadonlyArray<string>, tabSize: number) =>
+      getFoldRanges(lines, tabSize).length
+  )
+
+  private getEditorText = memoizeOne((lines: ReadonlyArray<string>) =>
+    lines.join('\n')
+  )
+
   public constructor(props: IIdeFileViewerProps) {
     super(props)
 
@@ -462,17 +473,6 @@ export class IdeFileViewer extends React.Component<
     const { contents } = this.state
     return contents?.kind === 'text' ? contents.lines : null
   }
-
-  private getChangeStarts = memoizeOne(getChangeGroupStarts)
-
-  private getFoldRangeCount = memoizeOne(
-    (lines: ReadonlyArray<string>, tabSize: number) =>
-      getFoldRanges(lines, tabSize).length
-  )
-
-  private getEditorText = memoizeOne((lines: ReadonlyArray<string>) =>
-    lines.join('\n')
-  )
 
   private onDirtyChange = (isDirty: boolean) => {
     const { repository, path } = this.props

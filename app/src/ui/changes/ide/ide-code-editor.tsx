@@ -1149,6 +1149,9 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     } as React.CSSProperties
 
     return (
+      // Hovering only shows an extra hint, and the keyboard has its own way to
+      // reach it, so there is no focus event to pair this with.
+      // eslint-disable-next-line jsx-a11y/mouse-events-have-key-events
       <div
         className="ide-code-editor"
         style={style}

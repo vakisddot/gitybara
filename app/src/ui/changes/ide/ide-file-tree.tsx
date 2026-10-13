@@ -94,6 +94,86 @@ export class IdeFileTree extends React.Component<
   private loadRequestId = 0
   private reloadTimeoutId: number | null = null
 
+  private getChangedPaths = memoizeOne(
+    (changedFiles: ReadonlyArray<WorkingDirectoryFileChange>) =>
+      changedFiles.map(file => file.path)
+  )
+
+  private getChangesByPath = memoizeOne(
+    (changedFiles: ReadonlyArray<WorkingDirectoryFileChange>) =>
+      new Map(changedFiles.map(file => [file.path, file]))
+  )
+
+  private getChangedFileCounts = memoizeOne(getChangedFileCountByDirectory)
+
+  private getFileItems = memoizeOne(
+    (
+      repositoryPaths: ReadonlyArray<string>,
+      changedPaths: ReadonlyArray<string>,
+      filterText: string,
+      changedOnly: boolean
+    ): ReadonlyArray<IChangesTreeFileItem> =>
+      filterIdePaths(
+        mergeFilePaths(repositoryPaths, changedPaths),
+        changedPaths,
+        { text: filterText, changedOnly }
+      ).map(path => ({ id: path, path }))
+  )
+
+  private getDirectoryIds = memoizeOne(
+    (fileItems: ReadonlyArray<IChangesTreeFileItem>) =>
+      getChangesTreeDirectoryIds(fileItems)
+  )
+
+  private getRows = memoizeOne(
+    (
+      fileItems: ReadonlyArray<IChangesTreeFileItem>,
+      expandedDirectoryIds: ReadonlySet<string> | null,
+      filterCollapsedIds: ReadonlySet<string>
+    ): ReadonlyArray<IdeTreeRow> =>
+      buildChangesTreeRows(
+        fileItems,
+        expandedDirectoryIds === null
+          ? filterCollapsedIds
+          : getCollapsedIdeDirectoryIds(
+              this.getDirectoryIds(fileItems),
+              expandedDirectoryIds
+            )
+      )
+  )
+
+  private getSelectedRows = memoizeOne(
+    (
+      visibleRows: ReadonlyArray<IdeTreeRow>,
+      selectedPath: string | null
+    ): ReadonlyArray<RowIndexPath> => {
+      const index =
+        selectedPath === null
+          ? -1
+          : visibleRows.findIndex(
+              row => row.kind === 'file' && row.item.path === selectedPath
+            )
+
+      return index === -1 ? [] : [{ section: 0, row: index }]
+    }
+  )
+
+  private getDirectoryRowClassNameMap = memoizeOne(
+    (visibleRows: ReadonlyArray<IdeTreeRow>) => {
+      const directoryRows = new Array<RowIndexPath>()
+
+      visibleRows.forEach((row, index) => {
+        if (row.kind === 'directory') {
+          directoryRows.push({ section: 0, row: index })
+        }
+      })
+
+      return new Map<string, ReadonlyArray<RowIndexPath>>([
+        ['changes-tree-directory-list-item', directoryRows],
+      ])
+    }
+  )
+
   public constructor(props: IIdeFileTreeProps) {
     super(props)
 
@@ -180,57 +260,9 @@ export class IdeFileTree extends React.Component<
     }
   }
 
-  private getChangedPaths = memoizeOne(
-    (changedFiles: ReadonlyArray<WorkingDirectoryFileChange>) =>
-      changedFiles.map(file => file.path)
-  )
-
   private get changedPaths() {
     return this.getChangedPaths(this.props.changedFiles)
   }
-
-  private getChangesByPath = memoizeOne(
-    (changedFiles: ReadonlyArray<WorkingDirectoryFileChange>) =>
-      new Map(changedFiles.map(file => [file.path, file]))
-  )
-
-  private getChangedFileCounts = memoizeOne(getChangedFileCountByDirectory)
-
-  private getFileItems = memoizeOne(
-    (
-      repositoryPaths: ReadonlyArray<string>,
-      changedPaths: ReadonlyArray<string>,
-      filterText: string,
-      changedOnly: boolean
-    ): ReadonlyArray<IChangesTreeFileItem> =>
-      filterIdePaths(
-        mergeFilePaths(repositoryPaths, changedPaths),
-        changedPaths,
-        { text: filterText, changedOnly }
-      ).map(path => ({ id: path, path }))
-  )
-
-  private getDirectoryIds = memoizeOne(
-    (fileItems: ReadonlyArray<IChangesTreeFileItem>) =>
-      getChangesTreeDirectoryIds(fileItems)
-  )
-
-  private getRows = memoizeOne(
-    (
-      fileItems: ReadonlyArray<IChangesTreeFileItem>,
-      expandedDirectoryIds: ReadonlySet<string> | null,
-      filterCollapsedIds: ReadonlySet<string>
-    ): ReadonlyArray<IdeTreeRow> =>
-      buildChangesTreeRows(
-        fileItems,
-        expandedDirectoryIds === null
-          ? filterCollapsedIds
-          : getCollapsedIdeDirectoryIds(
-              this.getDirectoryIds(fileItems),
-              expandedDirectoryIds
-            )
-      )
-  )
 
   private get isFiltering() {
     const { filterText, changedOnly } = this.state
@@ -261,38 +293,6 @@ export class IdeFileTree extends React.Component<
       filterCollapsedIds
     )
   }
-
-  private getSelectedRows = memoizeOne(
-    (
-      visibleRows: ReadonlyArray<IdeTreeRow>,
-      selectedPath: string | null
-    ): ReadonlyArray<RowIndexPath> => {
-      const index =
-        selectedPath === null
-          ? -1
-          : visibleRows.findIndex(
-              row => row.kind === 'file' && row.item.path === selectedPath
-            )
-
-      return index === -1 ? [] : [{ section: 0, row: index }]
-    }
-  )
-
-  private getDirectoryRowClassNameMap = memoizeOne(
-    (visibleRows: ReadonlyArray<IdeTreeRow>) => {
-      const directoryRows = new Array<RowIndexPath>()
-
-      visibleRows.forEach((row, index) => {
-        if (row.kind === 'directory') {
-          directoryRows.push({ section: 0, row: index })
-        }
-      })
-
-      return new Map<string, ReadonlyArray<RowIndexPath>>([
-        ['changes-tree-directory-list-item', directoryRows],
-      ])
-    }
-  )
 
   private canSelectRow = (index: RowIndexPath) => {
     return this.getVisibleRows()[index.row]?.kind === 'file'
