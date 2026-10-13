@@ -39,7 +39,7 @@ describe('StatsStore', () => {
     statsDb = await createStatsDb()
     const activityMonitor = new TestActivityMonitor()
 
-    new StatsStore(statsDb, activityMonitor, fakePost)
+    new StatsStore(statsDb, activityMonitor, fakePost, true)
 
     assert.equal(activityMonitor.subscriptionCount, 1)
 
@@ -59,7 +59,7 @@ describe('StatsStore', () => {
     statsDb = await createStatsDb()
     const activityMonitor = new TestActivityMonitor()
 
-    const store = new StatsStore(statsDb, activityMonitor, fakePost)
+    const store = new StatsStore(statsDb, activityMonitor, fakePost, true)
 
     assert.equal(activityMonitor.subscriptionCount, 1)
 
@@ -78,7 +78,12 @@ describe('StatsStore', () => {
 
   it('tracks GitHub Copilot app handoffs', async () => {
     statsDb = await createStatsDb()
-    const store = new StatsStore(statsDb, new TestActivityMonitor(), fakePost)
+    const store = new StatsStore(
+      statsDb,
+      new TestActivityMonitor(),
+      fakePost,
+      true
+    )
 
     await store.increment('openInCopilotAppCount')
 
@@ -88,7 +93,12 @@ describe('StatsStore', () => {
 
   it('persists eligible and shown notification counts separately', async () => {
     statsDb = await createStatsDb()
-    const store = new StatsStore(statsDb, new TestActivityMonitor(), fakePost)
+    const store = new StatsStore(
+      statsDb,
+      new TestActivityMonitor(),
+      fakePost,
+      true
+    )
 
     await store.increment('checksFailedNotificationCount', 2)
     await store.increment('checksFailedNotificationShownCount')
@@ -141,10 +151,15 @@ describe('StatsStore', () => {
     const postedBodies: Array<Record<string, any>> = []
     localStorage.setItem('has-sent-stats-opt-in-ping', '1')
 
-    const store = new StatsStore(statsDb, activityMonitor, async body => {
-      postedBodies.push(body)
-      return new Response(null, { status: 200 })
-    })
+    const store = new StatsStore(
+      statsDb,
+      activityMonitor,
+      async body => {
+        postedBodies.push(body)
+        return new Response(null, { status: 200 })
+      },
+      true
+    )
 
     await store.increment('commits')
     await store.sendStats([], [])
@@ -196,7 +211,12 @@ describe('StatsStore', () => {
           return new Response(null, { status: 200 })
         }
       )
-      const store = new StatsStore(statsDb, new TestActivityMonitor())
+      const store = new StatsStore(
+        statsDb,
+        new TestActivityMonitor(),
+        undefined,
+        true
+      )
       await store.increment('commits')
 
       assert.strictEqual(await store.sendStats([], []), true)
@@ -238,7 +258,7 @@ describe('StatsStore', () => {
       }
     )
 
-    const store = new StatsStore(statsDb, activityMonitor)
+    const store = new StatsStore(statsDb, activityMonitor, undefined, true)
     await store.increment('commits')
     await store.increment('checksFailedNotificationShownCount')
     await store.recordLaunchStats({
@@ -314,7 +334,7 @@ describe('StatsStore', () => {
       }
     )
 
-    new StatsStore(statsDb, activityMonitor)
+    new StatsStore(statsDb, activityMonitor, undefined, true)
     await requestReceived
 
     const payload = JSON.parse(requestBody ?? '')

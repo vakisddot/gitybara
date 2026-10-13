@@ -672,7 +672,8 @@ export class StatsStore implements IStatsStore {
   public constructor(
     private readonly db: StatsDatabase,
     private readonly uiActivityMonitor: IUiActivityMonitor,
-    private readonly post = defaultPostImplementation
+    private readonly post = defaultPostImplementation,
+    private readonly reportingEnabled = isUsageReportingEnabled
   ) {
     const storedValue = getHasOptedOutOfStats()
 
@@ -707,7 +708,7 @@ export class StatsStore implements IStatsStore {
     accounts: ReadonlyArray<Account>,
     repositories: ReadonlyArray<Repository>
   ) {
-    if (this.optOut || !isUsageReportingEnabled) {
+    if (this.optOut || !this.reportingEnabled) {
       return
     }
 
@@ -742,7 +743,7 @@ export class StatsStore implements IStatsStore {
     accounts: ReadonlyArray<Account>,
     repositories: ReadonlyArray<Repository>
   ): Promise<boolean> {
-    if (this.optOut || !isUsageReportingEnabled) {
+    if (this.optOut || !this.reportingEnabled) {
       return false
     }
 
@@ -1436,7 +1437,7 @@ export class StatsStore implements IStatsStore {
     optOut: boolean,
     previousValue: boolean | undefined
   ): Promise<void> {
-    if (!isUsageReportingEnabled) {
+    if (!this.reportingEnabled) {
       return
     }
 
