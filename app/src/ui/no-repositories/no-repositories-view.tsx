@@ -24,6 +24,9 @@ interface INoRepositoriesProps {
   /** A function to call when the user chooses to add a local repository. */
   readonly onAdd: () => void
 
+  /** A function to call when the user chooses to import from GitHub Desktop. */
+  readonly onImportFromGitHubDesktop: () => void
+
   /** Called when the user chooses to create a tutorial repository */
   readonly onCreateTutorialRepository: () => void
 
@@ -353,6 +356,16 @@ export class NoRepositoriesView extends React.Component<
     )
   }
 
+  private renderImportFromGitHubDesktopButton() {
+    return this.renderButtonGroupButton(
+      octicons.desktopDownload,
+      __DARWIN__
+        ? 'Import your Repositories from GitHub Desktop…'
+        : 'Import your repositories from GitHub Desktop…',
+      this.props.onImportFromGitHubDesktop
+    )
+  }
+
   private renderGetStartedActions() {
     return (
       <div className="content-pane">
@@ -361,6 +374,7 @@ export class NoRepositoriesView extends React.Component<
           {this.renderCloneButton()}
           {this.renderCreateRepositoryButton()}
           {this.renderAddExistingRepositoryButton()}
+          {this.renderImportFromGitHubDesktopButton()}
         </div>
 
         <div className="drag-drop-info">

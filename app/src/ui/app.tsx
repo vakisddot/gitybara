@@ -3962,6 +3962,7 @@ export class App extends React.Component<IAppProps, IAppState> {
           onCreate={this.showCreateRepository}
           onClone={this.showCloneRepo}
           onAdd={this.showAddLocalRepo}
+          onImportFromGitHubDesktop={this.showImportFromGitHubDesktop}
           onCreateTutorialRepository={this.showCreateTutorialRepositoryPopup}
           onResumeTutorialRepository={this.onResumeTutorialRepository}
           tutorialPaused={this.isTutorialPaused()}
