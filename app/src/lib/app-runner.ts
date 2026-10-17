@@ -13,7 +13,10 @@ export interface IRunProfile {
   /** The command that starts the app, as the program and its arguments. */
   readonly run: ReadonlyArray<string>
 
-  /** The folder to run in, relative to the repository. Defaults to the repository. */
+  /**
+   * The folder to start `run` in, relative to the repository. Defaults to the
+   * repository. The `build` command always runs in the repository.
+   */
   readonly cwd?: string
 }
 

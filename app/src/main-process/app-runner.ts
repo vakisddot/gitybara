@@ -65,21 +65,23 @@ function killTree(child: ChildProcess) {
 }
 
 /**
- * Run a command to the end, giving its output (or the reason it couldn't run)
- * if it fails.
+ * Run a command to the end in the repository, giving its output (or the reason
+ * it couldn't run) if it fails.
+ *
+ * The profile's `cwd` is only for starting the app. Commands like
+ * `dotnet build Project/Project.csproj` are written relative to the repository.
  */
 function runToCompletion(
   run: IRun,
   command: ReadonlyArray<string>,
-  repositoryPath: string,
-  profile: IRunProfile
+  repositoryPath: string
 ): Promise<string | null> {
   return new Promise(resolve => {
     const [program, ...args] = command
     let output = ''
 
     const child = spawn(resolveProgram(repositoryPath, program), args, {
-      cwd: resolveWorkingDirectory(repositoryPath, profile),
+      cwd: repositoryPath,
       windowsHide: true,
     })
     run.child = child
@@ -146,13 +148,11 @@ export function installAppRunnerHandlers() {
         error: null,
       })
 
-      const failure = await runToCompletion(
-        run,
-        profile.build,
-        repositoryPath,
-        profile
-      )
+      const failure = await runToCompletion(run, profile.build, repositoryPath)
       if (run.isStopping || failure !== null) {
+        if (!run.isStopping) {
+          log.warn(`[AppRunner] ${profile.name}: build failed\n${failure}`)
+        }
         finish(repositoryPath, run, profile, `Build failed.\n${failure ?? ''}`)
         return
       }
@@ -167,29 +167,32 @@ export function installAppRunnerHandlers() {
     })
     run.child = child
 
-    child.on('spawn', () =>
+    let hasStarted = false
+
+    child.on('spawn', () => {
+      hasStarted = true
       setStatus(repositoryPath, run, {
         phase: 'running',
         profile: profile.name,
         error: null,
       })
-    )
-    child.on('error', error =>
+    })
+    child.on('error', error => {
+      log.warn(`[AppRunner] ${profile.name}: ${program}: ${error.message}`)
+      // Once the app is running, how it ends is up to whoever closes it.
       finish(
         repositoryPath,
         run,
         profile,
-        `Could not run ${program}: ${error.message}`
+        hasStarted ? null : `Could not run ${program}: ${error.message}`
       )
-    )
-    child.on('exit', code =>
-      finish(
-        repositoryPath,
-        run,
-        profile,
-        code === 0 ? null : `${profile.name} exited with code ${code}.`
+    })
+    child.on('exit', (code, signal) => {
+      log.info(
+        `[AppRunner] ${profile.name} exited with code ${code} (signal ${signal})`
       )
-    )
+      finish(repositoryPath, run, profile, null)
+    })
   }
 
   const requireAbsolute = (repositoryPath: string) => {
