@@ -34,6 +34,9 @@ interface IRunButtonState {
   readonly isDropdownOpen: boolean
 }
 
+/** Wider than the button, so that the commands in the list are readable. */
+const ProfileListStyle: React.CSSProperties = { width: 340 }
+
 /** What a profile will run, for people to check before they start it. */
 function describeCommands(profile: IRunProfile) {
   const commands = [profile.build, profile.run].filter(
@@ -171,7 +174,7 @@ export class RunButton extends React.Component<
 
     // This borrows the push and pull dropdown's list of buttons.
     return (
-      <div className="push-pull-dropdown">
+      <div className="push-pull-dropdown run-dropdown">
         {config.profiles.map(profile => (
           <RunProfileItem
             key={profile.name}
@@ -191,7 +194,7 @@ export class RunButton extends React.Component<
       <ToolbarButton
         className="run-button"
         style={ToolbarButtonStyle.Subtitle}
-        icon={octicons.stop}
+        icon={octicons.squareFill}
         title={isBuilding ? 'Building…' : 'Stop'}
         description={status.profile ?? undefined}
         tooltip={isBuilding ? 'Cancel the build' : `Stop ${status.profile}`}
@@ -211,7 +214,7 @@ export class RunButton extends React.Component<
         dropdownStyle={ToolbarDropdownStyle.MultiOption}
         icon={octicons.play}
         title="Run"
-        description={status.error ? `${profile.name} failed` : profile.name}
+        description={status.error ? 'Last run failed' : profile.name}
         tooltip={status.error ?? describeCommands(profile)}
         onClick={this.onStartClick}
         ariaLabel="Run profiles"
@@ -219,6 +222,7 @@ export class RunButton extends React.Component<
         dropdownState={isDropdownOpen ? 'open' : 'closed'}
         onDropdownStateChanged={this.onDropdownStateChanged}
         dropdownContentRenderer={this.renderProfiles}
+        foldoutStyleOverrides={ProfileListStyle}
         enableFocusTrap={this.props.enableFocusTrap}
       />
     )
