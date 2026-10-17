@@ -44,7 +44,6 @@ const props: React.ComponentProps<typeof IdeCodeEditor> = {
   highlight: false,
   readOnly: true,
   lineChanges: NoLineChanges,
-  highlightChanges: false,
   unchangedTextOpacity: 100,
   showPreviousLines: false,
   collapsedRanges: ranges,
@@ -146,5 +145,31 @@ describe('IdeCodeEditor collapsed lines', () => {
   it('shows the collapsed lines that a match of a search is in', () => {
     ref.current!.search('line 14', 'next')
     assert.deepStrictEqual(widgets(), ['⋯ 6 unchanged lines'])
+  })
+})
+
+describe('IdeCodeEditor changed lines', () => {
+  it('always gives the changed lines a color in the background', () => {
+    view.rerender(
+      React.createElement(IdeCodeEditor, {
+        ...props,
+        ref,
+        collapsedRanges: [],
+        lineChanges: {
+          ...NoLineChanges,
+          added: new Set([7]),
+          modified: new Set([8]),
+        },
+      })
+    )
+
+    assert.strictEqual(
+      container.querySelectorAll('.change-added-line').length,
+      1
+    )
+    assert.strictEqual(
+      container.querySelectorAll('.change-modified-line').length,
+      1
+    )
   })
 })

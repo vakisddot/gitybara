@@ -43,7 +43,6 @@ const props: React.ComponentProps<typeof IdeCodeEditor> = {
   highlight: false,
   readOnly: true,
   lineChanges: NoLineChanges,
-  highlightChanges: false,
   unchangedTextOpacity: 100,
   showPreviousLines: false,
   collapsedRanges: [],

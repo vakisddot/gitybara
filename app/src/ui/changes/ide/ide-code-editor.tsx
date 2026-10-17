@@ -84,11 +84,11 @@ interface IIdeCodeEditorProps {
 
   readonly readOnly: boolean
 
-  /** The lines that differ from the committed version, to mark in the gutter */
+  /**
+   * The lines that differ from the committed version, to mark in the gutter
+   * and with a color in the background
+   */
   readonly lineChanges: ILineChanges
-
-  /** Whether to also give those lines a color in the background */
-  readonly highlightChanges: boolean
 
   /** How visible unchanged text is, as a percentage */
   readonly unchangedTextOpacity: number
@@ -313,10 +313,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     if (prevProps.path !== path || prevProps.revision !== revision) {
       this.setText(prevProps.path === path)
-    } else if (
-      prevProps.lineChanges !== lineChanges ||
-      prevProps.highlightChanges !== this.props.highlightChanges
-    ) {
+    } else if (prevProps.lineChanges !== lineChanges) {
       this.markChanges()
     }
     if (prevProps.navigationPosition !== this.props.navigationPosition) {
@@ -1164,19 +1161,15 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       added.forEach(line => mark(line, 'text', 'ide-changed-line'))
       modified.forEach(line => mark(line, 'text', 'ide-changed-line'))
 
-      if (this.props.highlightChanges) {
-        added.forEach(line => mark(line, 'background', 'change-added-line'))
-        modified.forEach(line =>
-          mark(line, 'background', 'change-modified-line')
-        )
+      added.forEach(line => mark(line, 'background', 'change-added-line'))
+      modified.forEach(line => mark(line, 'background', 'change-modified-line'))
 
-        // A line across the text where lines were removed
-        removedBefore.forEach(line =>
-          line >= lineCount
-            ? mark(lineCount - 1, 'background', 'change-removed-after-line')
-            : mark(line, 'background', 'change-removed-before-line')
-        )
-      }
+      // A line across the text where lines were removed
+      removedBefore.forEach(line =>
+        line >= lineCount
+          ? mark(lineCount - 1, 'background', 'change-removed-after-line')
+          : mark(line, 'background', 'change-removed-before-line')
+      )
 
       removedBefore.forEach(line =>
         line >= lineCount

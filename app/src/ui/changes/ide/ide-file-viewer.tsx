@@ -2,7 +2,6 @@ import * as React from 'react'
 import memoizeOne from 'memoize-one'
 import * as ipcRenderer from '../../../lib/ipc-renderer'
 
-import { getBoolean, setBoolean } from '../../../lib/local-storage'
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
 import { AppFileStatus } from '../../../models/status'
@@ -54,8 +53,6 @@ const ReloadDelay = 200
 
 /** How long after a mouse button the app command for it is taken as the same click. */
 const NativeNavigationEchoMs = 500
-
-const HighlightChangesKey = 'ide-highlight-changes'
 
 /** Edits that weren't saved and the text of the file they were made to. */
 interface IDraft {
@@ -143,9 +140,6 @@ interface IIdeFileViewerState {
   readonly changedOnDisk: boolean
   readonly saveError: string | null
 
-  /** Whether the lines that have changes have a color in the background */
-  readonly highlightChanges: boolean
-
   /** How visible unchanged text is, as a percentage */
   readonly unchangedTextOpacity: number
 
@@ -222,7 +216,6 @@ export class IdeFileViewer extends React.Component<
       isDirty: false,
       changedOnDisk: false,
       saveError: null,
-      highlightChanges: getBoolean(HighlightChangesKey, false),
       showPreviousLines: previousLinesSwitchedOn,
       isWholeFileExpanded: false,
       unchangedTextOpacity: getUnchangedTextOpacity(),
@@ -740,13 +733,6 @@ export class IdeFileViewer extends React.Component<
     this.setState({ isSearching: false, searchMessage: '' })
   }
 
-  private onToggleHighlightChanges = () => {
-    const highlightChanges = !this.state.highlightChanges
-
-    setBoolean(HighlightChangesKey, highlightChanges)
-    this.setState({ highlightChanges })
-  }
-
   private onUnchangedTextOpacityChange = (unchangedTextOpacity: number) => {
     setUnchangedTextOpacity(unchangedTextOpacity)
     this.setState({ unchangedTextOpacity })
@@ -961,15 +947,6 @@ export class IdeFileViewer extends React.Component<
           ariaLabel="Go to the next change"
         >
           <Octicon symbol={octicons.arrowDown} />
-        </Button>
-        <Button
-          className="ide-file-viewer-header-button"
-          onClick={this.onToggleHighlightChanges}
-          ariaPressed={this.state.highlightChanges}
-          tooltip="Highlight changed lines"
-          ariaLabel="Highlight changed lines"
-        >
-          <Octicon symbol={octicons.paintbrush} />
         </Button>
         {this.state.lineChanges.previousLines.length > 0 && (
           <Button
@@ -1221,7 +1198,6 @@ export class IdeFileViewer extends React.Component<
             tabSize={tabSize}
             highlight={isHighlightable(lines)}
             readOnly={isDeleted || this.props.readOnly === true}
-            highlightChanges={this.state.highlightChanges}
             unchangedTextOpacity={this.state.unchangedTextOpacity}
             showPreviousLines={this.state.showPreviousLines}
             collapsedRanges={this.getCollapsedRanges(lines)}
