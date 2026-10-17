@@ -7,7 +7,12 @@ import 'codemirror/addon/search/searchcursor'
 import 'codemirror/addon/selection/active-line'
 import 'codemirror/mode/meta'
 
-import { getFoldRanges, getFoldRangesByStart, IFoldRange } from './ide-folding'
+import {
+  getFoldRanges,
+  getFoldRangesByStart,
+  IFoldRange,
+  isPartlyOverlapping,
+} from './ide-folding'
 import {
   detectIndentUnit,
   getIndentGuidesStyle,
@@ -174,9 +179,14 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     readonly className: string
   }>()
 
-  /** The unchanged lines that were collapsed, and the marks that hide them */
+  /** The unchanged lines that were collapsed */
   private collapsedRanges: ReadonlyArray<ILineRange> = []
-  private collapsedMarks = new Array<CodeMirror.TextMarker>()
+
+  /** The lines that are still collapsed, and the marks that hide them */
+  private collapsed = new Array<{
+    readonly range: ILineRange
+    readonly mark: CodeMirror.TextMarker
+  }>()
 
   /** Marks over the scroll bar for the lines that have changes */
   private ruler: HTMLDivElement | null = null
@@ -227,12 +237,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       lineWrapping: false,
       viewportMargin: 20,
       gutters: ['CodeMirror-linenumbers', FoldGutter],
-      foldGutter: {
-        gutter: FoldGutter,
-        rangeFinder: this.findFoldRange,
-        indicatorOpen: createFoldIndicator(false),
-        indicatorFolded: createFoldIndicator(true),
-      },
+      foldGutter: this.getFoldGutterOptions(),
       foldOptions: {
         rangeFinder: this.findFoldRange,
         widget: this.createFoldWidget,
@@ -690,13 +695,22 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   private unfoldLine(line: number) {
     const editor = this.editor
 
+    let shownCollapsedLines = false
+
     editor?.operation(() => {
       for (const mark of editor.findMarksAt(CodeMirror.Pos(line, 0))) {
-        if (isFoldMark(mark) || this.collapsedMarks.includes(mark)) {
+        if (this.collapsed.some(c => c.mark === mark)) {
+          mark.clear()
+          shownCollapsedLines = true
+        } else if (isFoldMark(mark)) {
           mark.clear()
         }
       }
     })
+
+    if (shownCollapsedLines) {
+      this.refreshFoldGutter()
+    }
   }
 
   /**
@@ -821,7 +835,11 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   ): CodeMirror.FoldRange | undefined => {
     const range = this.getAnalysis().byStart.get(pos.line)
 
-    if (range === undefined) {
+    // A block that runs into or out of collapsed lines can't be folded
+    if (
+      range === undefined ||
+      this.collapsed.some(c => isPartlyOverlapping(range, c.range))
+    ) {
       return undefined
     }
 
@@ -1060,9 +1078,26 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     const lineCount = editor.lineCount()
 
     editor.operation(() => {
-      for (const { start, end } of ranges) {
+      for (const range of ranges) {
+        const { start, end } = range
+
         if (end >= lineCount) {
           continue
+        }
+
+        // CodeMirror can't hide lines that a folded block runs into or out of
+        for (const mark of editor.getAllMarks()) {
+          const found = isFoldMark(mark) ? mark.find() : undefined
+          if (
+            found !== undefined &&
+            'from' in found &&
+            isPartlyOverlapping(
+              { start: found.from.line, end: found.to.line },
+              range
+            )
+          ) {
+            mark.clear()
+          }
         }
 
         const widget = document.createElement('span')
@@ -1077,21 +1112,44 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
           CodeMirror.Pos(end),
           { replacedWith: widget, inclusiveLeft: true, inclusiveRight: true }
         )
-        CodeMirror.on(mark, 'clear', () =>
+        CodeMirror.on(mark, 'clear', () => {
           editor.removeLineClass(handle, 'wrap', 'ide-collapsed-line')
-        )
-        widget.addEventListener('click', () => mark.clear())
-        this.collapsedMarks.push(mark)
+          this.collapsed = this.collapsed.filter(c => c.mark !== mark)
+        })
+        widget.addEventListener('click', () => {
+          mark.clear()
+          this.refreshFoldGutter()
+        })
+        this.collapsed.push({ range, mark })
       }
     })
+
+    this.refreshFoldGutter()
+  }
+
+  private getFoldGutterOptions() {
+    return {
+      gutter: FoldGutter,
+      rangeFinder: this.findFoldRange,
+      indicatorOpen: createFoldIndicator(false),
+      indicatorFolded: createFoldIndicator(true),
+    }
+  }
+
+  /**
+   * Draw the fold buttons again, for the blocks that can or can't be folded
+   * since lines were collapsed or shown. The gutter only redraws by itself
+   * when the text changes.
+   */
+  private refreshFoldGutter() {
+    this.editor?.setOption('foldGutter', this.getFoldGutterOptions())
   }
 
   private clearCollapsedLines() {
-    const marks = this.collapsedMarks
+    const { collapsed } = this
 
-    this.collapsedMarks = []
     this.collapsedRanges = []
-    this.editor?.operation(() => marks.forEach(mark => mark.clear()))
+    this.editor?.operation(() => collapsed.forEach(({ mark }) => mark.clear()))
   }
 
   private async applyMode() {

@@ -173,3 +173,67 @@ describe('IdeCodeEditor changed lines', () => {
     )
   })
 })
+
+describe('IdeCodeEditor folding next to collapsed lines', () => {
+  // Two blocks: lines 0 to 8 and lines 9 to 11
+  const code = [
+    'function a() {',
+    '  one',
+    '  two',
+    '  three',
+    '  four',
+    '  five',
+    '  six',
+    '  seven',
+    '}',
+    'function b() {',
+    '  x',
+    '}',
+  ].join('\n')
+
+  const renderCode = (collapsedRanges: ReadonlyArray<ILineRange>) =>
+    view.rerender(
+      React.createElement(IdeCodeEditor, {
+        ...props,
+        ref,
+        revision: 1,
+        text: code,
+        collapsedRanges,
+      })
+    )
+
+  const foldWidgets = () => container.querySelectorAll('.ide-fold-ellipsis')
+
+  it('folds all the blocks without one that is partly collapsed', () => {
+    renderCode([{ start: 3, end: 11 }])
+
+    assert.doesNotThrow(() => ref.current!.foldAll())
+    assert.deepStrictEqual(widgets(), ['⋯ 9 unchanged lines'])
+    assert.strictEqual(foldWidgets().length, 0)
+  })
+
+  it('folds the blocks that are shown in full', () => {
+    renderCode([{ start: 9, end: 11 }])
+
+    ref.current!.foldAll()
+    assert.strictEqual(foldWidgets().length, 1)
+  })
+
+  it('shows a fold button for a block once its lines are shown', () => {
+    renderCode([{ start: 3, end: 11 }])
+    const indicators = () => container.querySelectorAll('.ide-fold-indicator')
+    assert.strictEqual(indicators().length, 0)
+
+    container.querySelector<HTMLElement>('.ide-collapsed-lines')!.click()
+    assert.strictEqual(indicators().length, 2)
+  })
+
+  it('collapses lines again over blocks that were folded', () => {
+    renderCode([])
+    ref.current!.foldAll()
+    assert.strictEqual(foldWidgets().length, 2)
+
+    assert.doesNotThrow(() => renderCode([{ start: 3, end: 11 }]))
+    assert.deepStrictEqual(widgets(), ['⋯ 9 unchanged lines'])
+  })
+})

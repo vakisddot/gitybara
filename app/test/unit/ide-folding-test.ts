@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
 
-import { getFoldRanges } from '../../src/ui/changes/ide/ide-folding'
+import {
+  getFoldRanges,
+  isPartlyOverlapping,
+} from '../../src/ui/changes/ide/ide-folding'
 
 describe('ide-folding', () => {
   describe('getFoldRanges', () => {
@@ -69,6 +72,30 @@ describe('ide-folding', () => {
     it('has no blocks without indentation', () => {
       assert.deepStrictEqual(getFoldRanges(['a', 'b', 'c'], 4), [])
       assert.deepStrictEqual(getFoldRanges([], 4), [])
+    })
+  })
+
+  describe('isPartlyOverlapping', () => {
+    const block = { start: 10, end: 20 }
+
+    it('is true for hidden lines that run into or out of the block', () => {
+      assert.ok(isPartlyOverlapping(block, { start: 15, end: 30 }))
+      assert.ok(isPartlyOverlapping(block, { start: 0, end: 15 }))
+      // The block ends on the first hidden line
+      assert.ok(isPartlyOverlapping(block, { start: 20, end: 30 }))
+    })
+
+    it('is false when one holds the other', () => {
+      assert.ok(!isPartlyOverlapping(block, { start: 12, end: 18 }))
+      assert.ok(!isPartlyOverlapping(block, { start: 11, end: 20 }))
+      assert.ok(!isPartlyOverlapping(block, { start: 10, end: 20 }))
+      assert.ok(!isPartlyOverlapping(block, { start: 0, end: 30 }))
+    })
+
+    it('is false when they only touch or are apart', () => {
+      // The hidden lines end on the line the block starts on, which stays
+      assert.ok(!isPartlyOverlapping(block, { start: 0, end: 10 }))
+      assert.ok(!isPartlyOverlapping(block, { start: 21, end: 30 }))
     })
   })
 })

@@ -1,4 +1,5 @@
 import { getIndentColumns } from './ide-indentation'
+import { ILineRange } from './ide-line-changes'
 
 /**
  * A block of lines that can be folded, numbered from 0. When it's folded the
@@ -92,4 +93,22 @@ export function getFoldRangesByStart(
   ranges: ReadonlyArray<IFoldRange>
 ): ReadonlyMap<number, IFoldRange> {
   return new Map(ranges.map(range => [range.start, range]))
+}
+
+/**
+ * Whether a block and hidden lines overlap without one holding the other,
+ * which CodeMirror can't hide both of. A folded block hides the lines after
+ * its start up to its end, and the hidden lines go from their start to their
+ * end.
+ */
+export function isPartlyOverlapping(
+  block: IFoldRange,
+  hidden: ILineRange
+): boolean {
+  const overlaps = block.start < hidden.end && hidden.start <= block.end
+  const hiddenHoldsBlock =
+    hidden.start <= block.start && block.end <= hidden.end
+  const blockHoldsHidden = block.start < hidden.start && hidden.end <= block.end
+
+  return overlaps && !hiddenHoldsBlock && !blockHoldsHidden
 }
