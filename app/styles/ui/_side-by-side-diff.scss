@@ -126,6 +126,11 @@
       background: var(--diff-background-color);
       color: var(--diff-text-color);
 
+      // The Unchanged slider in the header, as in the Gitybara view
+      .content-wrapper {
+        opacity: var(--unchanged-text-opacity, 1);
+      }
+
       .line-number {
         background: var(--diff-gutter-background-color);
         border-color: var(--diff-border-color);

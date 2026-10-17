@@ -9,6 +9,7 @@ import {
   DiffLineType,
 } from '../../src/models/diff'
 import {
+  getAdjacentChangeStart,
   getChangeGroupStarts,
   getLineChanges,
   ILineChanges,
@@ -411,6 +412,21 @@ describe('ide-line-changes', () => {
 
     it('keeps deletion previews accessible when all lines were removed', () => {
       assert.deepStrictEqual(getChangeGroupStarts(changes([], [], [0]), 0), [0])
+    })
+  })
+
+  describe('getAdjacentChangeStart', () => {
+    const starts = [3, 10, 20]
+
+    it('goes to the change after or before the reference line', () => {
+      assert.strictEqual(getAdjacentChangeStart(starts, 3, 1), 10)
+      assert.strictEqual(getAdjacentChangeStart(starts, 12, -1), 10)
+      assert.strictEqual(getAdjacentChangeStart(starts, 10, -1), 3)
+    })
+
+    it('goes around from the last change to the first and back', () => {
+      assert.strictEqual(getAdjacentChangeStart(starts, 20, 1), 3)
+      assert.strictEqual(getAdjacentChangeStart(starts, 3, -1), 20)
     })
   })
 })

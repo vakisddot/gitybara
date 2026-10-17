@@ -3,6 +3,7 @@ import { Button } from '../lib/button'
 import { Octicon } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { DiffViewController, IDiffViewState } from './diff-view-controller'
+import { UnchangedTextOpacity } from './unchanged-text-opacity'
 
 interface IDiffViewControlsProps {
   readonly controller: DiffViewController
@@ -40,7 +41,13 @@ export class DiffViewControls extends React.Component<
     this.setState({ viewState: this.props.controller.state })
   }
 
+  private onPreviousChange = () => this.props.controller.goToChange(-1)
+  private onNextChange = () => this.props.controller.goToChange(1)
   private onToggleWholeFile = () => this.props.controller.toggleWholeFile()
+
+  private onUnchangedTextOpacityChange = (unchangedTextOpacity: number) => {
+    this.props.controller.setUnchangedTextOpacity(unchangedTextOpacity)
+  }
 
   public render() {
     const { viewState } = this.state
@@ -55,19 +62,45 @@ export class DiffViewControls extends React.Component<
       : 'Expand whole file'
 
     return (
-      <div className="ide-file-viewer-header-buttons">
-        <Button
-          className="ide-file-viewer-header-button"
-          onClick={this.onToggleWholeFile}
-          disabled={!viewState.canToggleWholeFile}
-          tooltip={`${wholeFileLabel} (E)`}
-          ariaLabel={wholeFileLabel}
-        >
-          <Octicon
-            symbol={isWholeFileExpanded ? octicons.fold : octicons.unfold}
-          />
-        </Button>
-      </div>
+      <>
+        {viewState.hasChanges && (
+          <div className="ide-file-viewer-header-buttons">
+            <Button
+              className="ide-file-viewer-header-button"
+              onClick={this.onPreviousChange}
+              tooltip="Previous change (W)"
+              ariaLabel="Go to the previous change"
+            >
+              <Octicon symbol={octicons.arrowUp} />
+            </Button>
+            <Button
+              className="ide-file-viewer-header-button"
+              onClick={this.onNextChange}
+              tooltip="Next change (S)"
+              ariaLabel="Go to the next change"
+            >
+              <Octicon symbol={octicons.arrowDown} />
+            </Button>
+            <UnchangedTextOpacity
+              value={viewState.unchangedTextOpacity}
+              onChange={this.onUnchangedTextOpacityChange}
+            />
+          </div>
+        )}
+        <div className="ide-file-viewer-header-buttons">
+          <Button
+            className="ide-file-viewer-header-button"
+            onClick={this.onToggleWholeFile}
+            disabled={!viewState.canToggleWholeFile}
+            tooltip={`${wholeFileLabel} (E)`}
+            ariaLabel={wholeFileLabel}
+          >
+            <Octicon
+              symbol={isWholeFileExpanded ? octicons.fold : octicons.unfold}
+            />
+          </Button>
+        </div>
+      </>
     )
   }
 }

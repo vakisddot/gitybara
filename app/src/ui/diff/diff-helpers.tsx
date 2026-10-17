@@ -222,6 +222,20 @@ export function isRowChanged(
 }
 
 /**
+ * The indices of the rows that start a group of changed rows next to each
+ * other, which is where "next change" and "previous change" go to.
+ */
+export function getChangeStartRows(
+  rows: ReadonlyArray<DiffRow | SimplifiedDiffRow>
+): ReadonlyArray<number> {
+  return rows.flatMap((row, index) =>
+    isRowChanged(row) && (index === 0 || !isRowChanged(rows[index - 1]))
+      ? [index]
+      : []
+  )
+}
+
+/**
  * Returns an object with two ILineTokens objects that can be used to highlight
  * the added and removed characters between two lines.
  *

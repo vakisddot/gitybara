@@ -307,3 +307,18 @@ export function getChangeGroupStarts(
 
   return starts
 }
+
+/**
+ * The start of the change to go to from the reference line, in the direction.
+ * After the last change it goes back to the first one, and the other way.
+ */
+export function getAdjacentChangeStart(
+  starts: ReadonlyArray<number>,
+  reference: number,
+  direction: 1 | -1
+): number {
+  return direction === 1
+    ? starts.find(start => start > reference) ?? starts[0]
+    : [...starts].reverse().find(start => start < reference) ??
+        starts[starts.length - 1]
+}

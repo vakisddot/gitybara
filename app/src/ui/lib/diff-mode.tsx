@@ -1,4 +1,10 @@
-import { getBoolean, setBoolean } from '../../lib/local-storage'
+import { clamp } from '../../lib/clamp'
+import {
+  getBoolean,
+  getNumber,
+  setBoolean,
+  setNumber,
+} from '../../lib/local-storage'
 
 export const ShowSideBySideDiffDefault = false
 export const ShowGitybaraDiffDefault = false
@@ -33,4 +39,20 @@ export function getShowGitybaraDiff(): boolean {
 
 export function setShowGitybaraDiff(showGitybaraDiff: boolean) {
   setBoolean(showGitybaraDiffKey, showGitybaraDiff)
+}
+
+// The key is from when only the IDE view had this, so that the choice carries
+// over
+const unchangedTextOpacityKey = 'ide-unchanged-text-opacity'
+
+/**
+ * How visible the text of unchanged lines is in the diffs and the IDE view, as
+ * a percentage.
+ */
+export function getUnchangedTextOpacity(): number {
+  return clamp(getNumber(unchangedTextOpacityKey, 100), 0, 100)
+}
+
+export function setUnchangedTextOpacity(unchangedTextOpacity: number) {
+  setNumber(unchangedTextOpacityKey, unchangedTextOpacity)
 }

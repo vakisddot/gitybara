@@ -2,12 +2,7 @@ import * as React from 'react'
 import memoizeOne from 'memoize-one'
 import * as ipcRenderer from '../../../lib/ipc-renderer'
 
-import {
-  getBoolean,
-  getNumber,
-  setBoolean,
-  setNumber,
-} from '../../../lib/local-storage'
+import { getBoolean, setBoolean } from '../../../lib/local-storage'
 import { Repository } from '../../../models/repository'
 import { WorkingDirectoryFileChange } from '../../../models/status'
 import { AppFileStatus } from '../../../models/status'
@@ -19,6 +14,11 @@ import { Button } from '../../lib/button'
 import { PathText } from '../../lib/path-text'
 import { AriaLiveContainer } from '../../accessibility/aria-live-container'
 import { DiffSearchInput } from '../../diff/diff-search-input'
+import { UnchangedTextOpacity } from '../../diff/unchanged-text-opacity'
+import {
+  getUnchangedTextOpacity,
+  setUnchangedTextOpacity,
+} from '../../lib/diff-mode'
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { IdeCodeEditor } from './ide-code-editor'
@@ -40,6 +40,7 @@ import {
   getIdeShortcut,
 } from './ide-shortcuts'
 import {
+  getAdjacentChangeStart,
   getChangeGroupStarts,
   getLineChanges,
   ILineChanges,
@@ -54,7 +55,6 @@ const ReloadDelay = 200
 const NativeNavigationEchoMs = 500
 
 const HighlightChangesKey = 'ide-highlight-changes'
-const UnchangedTextOpacityKey = 'ide-unchanged-text-opacity'
 
 /** Edits that weren't saved and the text of the file they were made to. */
 interface IDraft {
@@ -213,10 +213,7 @@ export class IdeFileViewer extends React.Component<
       saveError: null,
       highlightChanges: getBoolean(HighlightChangesKey, false),
       showPreviousLines: previousLinesSwitchedOn,
-      unchangedTextOpacity: Math.max(
-        0,
-        Math.min(100, getNumber(UnchangedTextOpacityKey, 100))
-      ),
+      unchangedTextOpacity: getUnchangedTextOpacity(),
       isSearching: false,
       searchMessage: '',
       navigation: null,
@@ -573,13 +570,7 @@ export class IdeFileViewer extends React.Component<
     }
 
     const reference = editor.getReferenceLine()
-    const target =
-      direction === 1
-        ? starts.find(start => start > reference) ?? starts[0]
-        : [...starts].reverse().find(start => start < reference) ??
-          starts[starts.length - 1]
-
-    editor.revealLine(target)
+    editor.revealLine(getAdjacentChangeStart(starts, reference, direction))
     return true
   }
 
@@ -716,12 +707,8 @@ export class IdeFileViewer extends React.Component<
     this.setState({ highlightChanges })
   }
 
-  private onUnchangedTextOpacityChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const unchangedTextOpacity = event.currentTarget.valueAsNumber
-
-    setNumber(UnchangedTextOpacityKey, unchangedTextOpacity)
+  private onUnchangedTextOpacityChange = (unchangedTextOpacity: number) => {
+    setUnchangedTextOpacity(unchangedTextOpacity)
     this.setState({ unchangedTextOpacity })
   }
 
@@ -952,22 +939,10 @@ export class IdeFileViewer extends React.Component<
             <Octicon symbol={octicons.diffRemoved} />
           </Button>
         )}
-        <label className="ide-file-viewer-opacity">
-          <span>Unchanged</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={this.state.unchangedTextOpacity}
-            onChange={this.onUnchangedTextOpacityChange}
-            aria-label="Unchanged text opacity"
-            aria-valuetext={`${this.state.unchangedTextOpacity}% visible`}
-          />
-          <span className="ide-file-viewer-opacity-value">
-            {this.state.unchangedTextOpacity}%
-          </span>
-        </label>
+        <UnchangedTextOpacity
+          value={this.state.unchangedTextOpacity}
+          onChange={this.onUnchangedTextOpacityChange}
+        />
       </div>
     )
   }

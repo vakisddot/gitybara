@@ -2,16 +2,24 @@ import { shallowEquals } from '../../lib/equality'
 
 /** What a diff can do, for the controls in its header */
 export interface IDiffViewState {
+  /** Whether there are changes to go to */
+  readonly hasChanges: boolean
+
   /** Whether the diff can show the whole file, or go back from showing it */
   readonly canToggleWholeFile: boolean
 
   /** Whether the diff shows the whole file */
   readonly isWholeFileExpanded: boolean
+
+  /** How visible the text of unchanged lines is, as a percentage */
+  readonly unchangedTextOpacity: number
 }
 
 /** A diff that the controls in its header act on */
 export interface IDiffView {
+  goToChange(direction: 1 | -1): void
   toggleWholeFile(): void
+  setUnchangedTextOpacity(unchangedTextOpacity: number): void
 }
 
 /**
@@ -63,7 +71,15 @@ export class DiffViewController {
     }
   }
 
+  public goToChange(direction: 1 | -1) {
+    this.view?.goToChange(direction)
+  }
+
   public toggleWholeFile() {
     this.view?.toggleWholeFile()
+  }
+
+  public setUnchangedTextOpacity(unchangedTextOpacity: number) {
+    this.view?.setUnchangedTextOpacity(unchangedTextOpacity)
   }
 }

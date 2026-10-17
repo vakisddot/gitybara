@@ -8,13 +8,19 @@ import {
 } from '../../src/ui/diff/diff-view-controller'
 
 const collapsed: IDiffViewState = {
+  hasChanges: true,
   canToggleWholeFile: true,
   isWholeFileExpanded: false,
+  unchangedTextOpacity: 100,
 }
 
 function createView() {
   let toggles = 0
-  const view: IDiffView = { toggleWholeFile: () => toggles++ }
+  const view: IDiffView = {
+    goToChange: () => {},
+    toggleWholeFile: () => toggles++,
+    setUnchangedTextOpacity: () => {},
+  }
   return { view, toggles: () => toggles }
 }
 

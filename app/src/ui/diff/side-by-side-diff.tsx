@@ -57,6 +57,7 @@ import {
   getFirstAndLastClassesSideBySide,
   textDiffEquals,
   isRowChanged,
+  getChangeStartRows,
 } from './diff-helpers'
 import { showContextualMenu } from '../../lib/menu-item'
 import { getTokens } from './get-tokens'
@@ -74,6 +75,13 @@ import ReactDOM from 'react-dom'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
 import { detectIndentUnit } from '../changes/ide/ide-indentation'
 import { getIdeShortcut } from '../changes/ide/ide-shortcuts'
+import { getAdjacentChangeStart } from '../changes/ide/ide-line-changes'
+import {
+  getUnchangedTextOpacity,
+  setUnchangedTextOpacity as saveUnchangedTextOpacity,
+} from '../lib/diff-mode'
+import { clamp } from '../../lib/clamp'
+import findLastIndex from 'lodash/findLastIndex'
 import {
   DiffViewController,
   IDiffView,
@@ -230,6 +238,9 @@ interface ISideBySideDiffState {
     hunkIndex: number
     expansionType: DiffHunkExpansionType
   } | null
+
+  /** How visible the text of unchanged lines is, as a percentage */
+  readonly unchangedTextOpacity: number
 }
 
 const listRowsHeightCache = new CellMeasurerCache({
@@ -246,6 +257,18 @@ export class SideBySideDiff
 
   /** Diff to restore when "Collapse all expanded lines" option is used */
   private diffToRestore: ITextDiff | null = null
+
+  /**
+   * The row that the last jump to a change went to, where it scrolled, and the
+   * rows of the diff it was in
+   */
+  private lastChangeJump: {
+    readonly rows: ReadonlyArray<SimplifiedDiffRow>
+    readonly row: number
+    readonly top: number
+  } | null = null
+
+  private getChangeStarts = memoize(getChangeStartRows)
 
   private textSelectionStartRow: number | undefined = undefined
   private textSelectionEndRow: number | undefined = undefined
@@ -291,6 +314,7 @@ export class SideBySideDiff
       selectingTextInRow: 'before',
       lastExpandedHunk: null,
       ariaLiveMessage: '',
+      unchangedTextOpacity: getUnchangedTextOpacity(),
     }
   }
 
@@ -506,9 +530,67 @@ export class SideBySideDiff
   private getViewState(): IDiffViewState {
     const isWholeFileExpanded = this.diffToRestore !== null
     return {
+      hasChanges: this.getChangeStarts(this.getCurrentDiffRows()).length > 0,
       canToggleWholeFile: isWholeFileExpanded || this.canExpandWholeFile(),
       isWholeFileExpanded,
+      unchangedTextOpacity: this.state.unchangedTextOpacity,
     }
+  }
+
+  /**
+   * Scroll so the change after or before the one in view is a third of the way
+   * down. Returns false if there are no changes.
+   */
+  public goToChange(direction: 1 | -1) {
+    const list = this.virtualListRef.current
+    const node = findDOMNode(list)
+    const rows = this.getCurrentDiffRows()
+    const starts = this.getChangeStarts(rows)
+
+    if (
+      list === null ||
+      !(node instanceof HTMLElement) ||
+      starts.length === 0
+    ) {
+      return false
+    }
+
+    // Where each row starts, as the list lays them out
+    const offsets = new Array<number>()
+    let height = 0
+    for (let index = 0; index < rows.length; index++) {
+      offsets.push(height)
+      height += this.getRowHeight({ index })
+    }
+
+    const { scrollTop, clientHeight } = node
+    const jump = this.lastChangeJump
+    const third = Math.floor(clientHeight / 3)
+
+    // Right after a jump, go on from the change that was jumped to
+    const reference =
+      jump !== null && jump.rows === rows && Math.abs(scrollTop - jump.top) < 1
+        ? jump.row
+        : Math.max(
+            0,
+            findLastIndex(offsets, top => top <= scrollTop + third)
+          )
+
+    const row = getAdjacentChangeStart(starts, reference, direction)
+    const top = clamp(
+      offsets[row] - third,
+      0,
+      Math.max(0, height - clientHeight)
+    )
+
+    list.scrollToPosition(top)
+    this.lastChangeJump = { rows, row, top }
+    return true
+  }
+
+  public setUnchangedTextOpacity(unchangedTextOpacity: number) {
+    saveUnchangedTextOpacity(unchangedTextOpacity)
+    this.setState({ unchangedTextOpacity })
   }
 
   /** Expand the whole file, or collapse it again if it is expanded */
@@ -662,6 +744,11 @@ export class SideBySideDiff
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
         className={containerClassName}
+        style={
+          {
+            '--unchanged-text-opacity': this.state.unchangedTextOpacity / 100,
+          } as React.CSSProperties
+        }
         onMouseDown={this.onMouseDown}
         onKeyDown={this.onKeyDown}
       >
@@ -1681,13 +1768,26 @@ export class SideBySideDiff
     if (isCmdOrCtrl && !event.shiftKey && !event.altKey && event.key === 'f') {
       event.preventDefault()
       this.showSearch()
-    } else if (
-      !event.repeat &&
-      getIdeShortcut(event, true) === 'whole-file' &&
-      this.getViewState().canToggleWholeFile
-    ) {
-      event.preventDefault()
-      this.toggleWholeFile()
+      return
+    }
+
+    switch (getIdeShortcut(event, true)) {
+      case 'previous-change':
+        if (this.goToChange(-1)) {
+          event.preventDefault()
+        }
+        break
+      case 'next-change':
+        if (this.goToChange(1)) {
+          event.preventDefault()
+        }
+        break
+      case 'whole-file':
+        if (!event.repeat && this.getViewState().canToggleWholeFile) {
+          event.preventDefault()
+          this.toggleWholeFile()
+        }
+        break
     }
   }
 
