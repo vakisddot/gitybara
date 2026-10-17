@@ -9,3 +9,12 @@
     @include ellipsis;
   }
 }
+
+// The list of profiles, with the commands cut to two lines.
+.run-dropdown .detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
