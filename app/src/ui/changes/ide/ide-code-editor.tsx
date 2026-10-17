@@ -252,9 +252,12 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     editor.on('viewportChange', this.scheduleSemanticHighlight)
     if (this.props.repositoryPath !== undefined) {
       ipcRenderer.on('csharp-refresh', this.onCSharpRefresh)
-      editor
-        .getWrapperElement()
-        .addEventListener('mousedown', this.onCSharpClick)
+      const wrapper = editor.getWrapperElement()
+      wrapper.addEventListener('mousedown', this.onCSharpClick)
+      wrapper.addEventListener('mousemove', this.onNavigationModifier)
+      window.addEventListener('keydown', this.onNavigationModifier)
+      window.addEventListener('keyup', this.onNavigationModifier)
+      window.addEventListener('blur', this.onWindowBlur)
     }
 
     // Drawn over the scroll bar, where it shows where the changes are
@@ -319,9 +322,12 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     }
     if (this.props.repositoryPath !== undefined) {
       ipcRenderer.removeListener('csharp-refresh', this.onCSharpRefresh)
-      this.editor
-        ?.getWrapperElement()
-        .removeEventListener('mousedown', this.onCSharpClick)
+      const wrapper = this.editor?.getWrapperElement()
+      wrapper?.removeEventListener('mousedown', this.onCSharpClick)
+      wrapper?.removeEventListener('mousemove', this.onNavigationModifier)
+      window.removeEventListener('keydown', this.onNavigationModifier)
+      window.removeEventListener('keyup', this.onNavigationModifier)
+      window.removeEventListener('blur', this.onWindowBlur)
     }
     if (this.semanticTimer !== null) {
       window.clearTimeout(this.semanticTimer)
@@ -510,6 +516,22 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
         this.scheduleSemanticHighlight()
       }
     }
+  }
+
+  /**
+   * While Ctrl is held, the words that Ctrl+click goes to the definition of
+   * are shown as links. Moving the mouse also updates it, for when Ctrl was
+   * pressed in another window.
+   */
+  private onNavigationModifier = (event: KeyboardEvent | MouseEvent) => {
+    this.editor
+      ?.getWrapperElement()
+      .classList.toggle('ide-csharp-navigable', event.ctrlKey || event.metaKey)
+  }
+
+  /** The key up of Ctrl isn't seen after the window loses focus. */
+  private onWindowBlur = () => {
+    this.editor?.getWrapperElement().classList.remove('ide-csharp-navigable')
   }
 
   private onCSharpClick = (event: MouseEvent) => {
