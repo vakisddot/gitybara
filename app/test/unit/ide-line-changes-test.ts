@@ -147,6 +147,27 @@ describe('ide-line-changes', () => {
       assert.strictEqual(changes.previousLines.length, 1)
     })
 
+    it('highlights only the changed word of a line that moved deeper', () => {
+      const before = '    windowsHide: false,'
+      const after = '          windowsHide: true,'
+      const changes = getLineChanges([hunk(1, `-${before}`, `+${after}`)])
+      const start = after.indexOf('true')
+      assert.deepStrictEqual(changes.inlineChanges, [
+        { line: 0, start, end: start + 'true'.length },
+      ])
+      const oldStart = before.indexOf('false')
+      assert.deepStrictEqual(changes.previousLines[0].inlineChanges, [
+        { line: 0, start: oldStart, end: oldStart + 'false'.length },
+      ])
+    })
+
+    it('marks a line whose indentation alone changed without highlighting it', () => {
+      const changes = getLineChanges([hunk(1, '-  call()', '+    call()')])
+      assert.deepStrictEqual(sorted(changes.modified), [0])
+      assert.deepStrictEqual(changes.inlineChanges, [])
+      assert.deepStrictEqual(changes.previousLines, [])
+    })
+
     it('preserves a small original line when it gains a large insertion', () => {
       const changes = getLineChanges([
         hunk(1, '-call()', '+call(aVeryLongArgument)'),

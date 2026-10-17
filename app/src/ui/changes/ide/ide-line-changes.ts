@@ -71,6 +71,57 @@ function canPairLines(before: string, after: string): boolean {
   )
 }
 
+const isWordCharacter = (character: string | undefined) =>
+  character !== undefined && /[\p{L}\p{N}_$]/u.test(character)
+
+/**
+ * The parts of two related lines that differ. A change of indentation is left
+ * out, so a line that moved into a block isn't marked from its start, and a
+ * word that was replaced is marked whole instead of from where it differs.
+ */
+function getInlineRanges(before: string, after: string) {
+  const beforeIndent = before.length - before.trimStart().length
+  const afterIndent = after.length - after.trimStart().length
+  const { stringARange, stringBRange } = relativeChanges(
+    before.slice(beforeIndent),
+    after.slice(afterIndent)
+  )
+  const toRange = (location: number, length: number) => ({
+    start: location,
+    end: location + length,
+  })
+  let beforeRange = toRange(
+    stringARange.location + beforeIndent,
+    stringARange.length
+  )
+  let afterRange = toRange(
+    stringBRange.location + afterIndent,
+    stringBRange.length
+  )
+
+  if (stringARange.length > 0 && stringBRange.length > 0) {
+    beforeRange = toWordBoundaries(before, beforeRange)
+    afterRange = toWordBoundaries(after, afterRange)
+  }
+
+  return { before: beforeRange, after: afterRange }
+}
+
+/** Widen a range of the text so that it doesn't start or end inside a word. */
+function toWordBoundaries(
+  text: string,
+  range: { readonly start: number; readonly end: number }
+) {
+  let { start, end } = range
+  while (isWordCharacter(text[start - 1]) && isWordCharacter(text[start])) {
+    start--
+  }
+  while (isWordCharacter(text[end - 1]) && isWordCharacter(text[end])) {
+    end++
+  }
+  return { start, end }
+}
+
 /**
  * Work out which lines changed from the hunks of the diff between the
  * committed version of a file and the current one.
@@ -108,24 +159,20 @@ export function getLineChanges(hunks: ReadonlyArray<DiffHunk>): ILineChanges {
         }
 
         modified.add(line)
-        const { stringARange, stringBRange } = relativeChanges(before, content)
-        insertionOnly = insertionOnly && stringARange.length === 0
-        if (stringARange.length > 0) {
-          previousInlineChanges.push({
-            line: i,
-            start: stringARange.location,
-            end: stringARange.location + stringARange.length,
-          })
+        const ranges = getInlineRanges(before, content)
+        const isInsertion = ranges.before.start === ranges.before.end
+        insertionOnly = insertionOnly && isInsertion
+        if (!isInsertion) {
+          previousInlineChanges.push({ line: i, ...ranges.before })
         }
-        if (stringBRange.length > 0) {
-          let start = stringBRange.location
-          let end = start + stringBRange.length
+        if (ranges.after.start < ranges.after.end) {
+          let { start, end } = ranges.after
           // Repeated identifier prefixes can split an insertion (DiffLine /
           // DiffLineType). Shift an equivalent span to the identifier boundary.
-          if (stringARange.length === 0) {
+          if (isInsertion) {
             while (
               start > 0 &&
-              /[\p{L}\p{N}_$]/u.test(content[start - 1]) &&
+              isWordCharacter(content[start - 1]) &&
               content[start - 1] === content[end - 1]
             ) {
               start--
