@@ -3,7 +3,7 @@
   "productName": "Gitybara",
   "bundleID": "io.github.vakisddot.gitybara",
   "companyName": "Gitybara",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "./main.js",
   "repository": {
     "type": "git",
