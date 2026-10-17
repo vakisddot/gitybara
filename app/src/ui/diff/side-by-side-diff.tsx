@@ -73,6 +73,12 @@ import escapeRegExp from 'lodash/escapeRegExp'
 import ReactDOM from 'react-dom'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
 import { detectIndentUnit } from '../changes/ide/ide-indentation'
+import { getIdeShortcut } from '../changes/ide/ide-shortcuts'
+import {
+  DiffViewController,
+  IDiffView,
+  IDiffViewState,
+} from './diff-view-controller'
 
 const DefaultRowHeight = 20
 
@@ -151,6 +157,9 @@ interface ISideBySideDiffProps {
 
   /** Called when the user changes the hide whitespace in diffs setting. */
   readonly onHideWhitespaceInDiffChanged: (checked: boolean) => void
+
+  /** Connects the controls in the header of the diff to it, if there are any */
+  readonly viewController?: DiffViewController
 }
 
 interface ISideBySideDiffState {
@@ -228,10 +237,10 @@ const listRowsHeightCache = new CellMeasurerCache({
   fixedWidth: true,
 })
 
-export class SideBySideDiff extends React.Component<
-  ISideBySideDiffProps,
-  ISideBySideDiffState
-> {
+export class SideBySideDiff
+  extends React.Component<ISideBySideDiffProps, ISideBySideDiffState>
+  implements IDiffView
+{
   private virtualListRef = React.createRef<List>()
   private diffContainer: HTMLDivElement | null = null
 
@@ -300,6 +309,8 @@ export class SideBySideDiff extends React.Component<
     document.addEventListener('selectionchange', this.onDocumentSelectionChange)
 
     this.addContextMenuListenerToDiff()
+
+    this.props.viewController?.attach(this, this.getViewState())
   }
 
   private addContextMenuListenerToDiff = () => {
@@ -434,6 +445,7 @@ export class SideBySideDiff extends React.Component<
     )
     document.removeEventListener('mousemove', this.onUpdateSelection)
     this.removeContextMenuListenerFromDiff()
+    this.props.viewController?.detach(this)
   }
 
   public componentDidUpdate(
@@ -480,6 +492,31 @@ export class SideBySideDiff extends React.Component<
 
     if (this.state.lastExpandedHunk !== prevState.lastExpandedHunk) {
       this.focusAfterLastExpandedHunkChange()
+    }
+
+    const { viewController } = this.props
+    if (viewController !== prevProps.viewController) {
+      prevProps.viewController?.detach(this)
+      viewController?.attach(this, this.getViewState())
+    } else {
+      viewController?.update(this, this.getViewState())
+    }
+  }
+
+  private getViewState(): IDiffViewState {
+    const isWholeFileExpanded = this.diffToRestore !== null
+    return {
+      canToggleWholeFile: isWholeFileExpanded || this.canExpandWholeFile(),
+      isWholeFileExpanded,
+    }
+  }
+
+  /** Expand the whole file, or collapse it again if it is expanded */
+  public toggleWholeFile() {
+    if (this.diffToRestore !== null) {
+      this.onCollapseExpandedLines()
+    } else if (this.canExpandWholeFile()) {
+      this.onExpandWholeFile()
     }
   }
 
@@ -1490,8 +1527,19 @@ export class SideBySideDiff extends React.Component<
     ])
   }
 
+  /** Whether the diff can be expanded to the whole file, which it isn't yet */
+  private canExpandWholeFile() {
+    const { hunks } = this.state.diff
+
+    // A single hunk that can't be expanded is the whole file already
+    return (
+      this.canExpandDiff() &&
+      (hunks.length !== 1 ||
+        hunks[0].expansionType !== DiffHunkExpansionType.None)
+    )
+  }
+
   private buildExpandMenuItem(): IMenuItem | null {
-    const { diff } = this.state
     if (!this.canExpandDiff()) {
       return null
     }
@@ -1500,10 +1548,7 @@ export class SideBySideDiff extends React.Component<
       ? {
           label: __DARWIN__ ? 'Expand Whole File' : 'Expand whole file',
           action: this.onExpandWholeFile,
-          // If there is only one hunk that can't be expanded, disable this item
-          enabled:
-            diff.hunks.length !== 1 ||
-            diff.hunks[0].expansionType !== DiffHunkExpansionType.None,
+          enabled: this.canExpandWholeFile(),
         }
       : {
           label: __DARWIN__
@@ -1636,6 +1681,13 @@ export class SideBySideDiff extends React.Component<
     if (isCmdOrCtrl && !event.shiftKey && !event.altKey && event.key === 'f') {
       event.preventDefault()
       this.showSearch()
+    } else if (
+      !event.repeat &&
+      getIdeShortcut(event, true) === 'whole-file' &&
+      this.getViewState().canToggleWholeFile
+    ) {
+      event.preventDefault()
+      this.toggleWholeFile()
     }
   }
 

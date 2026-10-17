@@ -21,6 +21,7 @@ import { getFileContents, IFileContents } from './syntax-highlighting'
 import { getTextDiffWithBottomDummyHunk } from './text-diff-expansion'
 import { textDiffEquals } from './diff-helpers'
 import noop from 'lodash/noop'
+import { DiffViewController } from './diff-view-controller'
 
 /**
  * The time (in milliseconds) we allow when loading a diff before
@@ -91,6 +92,9 @@ interface ISeamlessDiffSwitcherProps {
 
   /** Whether we should show a confirmation dialog when the user discards changes */
   readonly askForConfirmationOnDiscardChanges?: boolean
+
+  /** Connects the controls in the header of the diff to it, if there are any */
+  readonly viewController?: DiffViewController
 
   /**
    * Called when the user requests to open a binary file in an the
@@ -407,6 +411,7 @@ export class SeamlessDiffSwitcher extends React.Component<
               this.props.askForConfirmationOnDiscardChanges
             }
             showDiffCheckMarks={showDiffCheckMarks}
+            viewController={this.props.viewController}
             onIncludeChanged={isLoadingDiff ? noop : onIncludeChanged}
             onDiscardChanges={isLoadingDiff ? noop : onDiscardChanges}
             onOpenBinaryFile={isLoadingDiff ? noop : onOpenBinaryFile}

@@ -36,6 +36,7 @@ import { pathExists } from '../../lib/path-exists'
 import { UnreachableCommitsTab } from './unreachable-commits-dialog'
 import { ExpandableCommitSummary } from './expandable-commit-summary'
 import { DiffHeader } from '../diff/diff-header'
+import { DiffViewController } from '../diff/diff-view-controller'
 import { DiffOptions } from '../diff/diff-options'
 import { IdeFileViewer } from '../changes/ide/ide-file-viewer'
 import { Account } from '../../models/account'
@@ -126,6 +127,7 @@ export class SelectedCommits extends React.Component<
   ISelectedCommitsState
 > {
   private readonly loadChangedFilesScheduler = new ThrottledScheduler(200)
+  private readonly diffViewController = new DiffViewController()
 
   public constructor(props: ISelectedCommitsProps) {
     super(props)
@@ -248,6 +250,7 @@ export class SelectedCommits extends React.Component<
           onChangeImageDiffType={this.props.onChangeImageDiffType}
           onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
           onOpenSubmodule={this.props.onOpenSubmodule}
+          viewController={this.diffViewController}
         />
       </div>
     )
@@ -268,12 +271,13 @@ export class SelectedCommits extends React.Component<
         status={status}
         showSideBySideDiff={this.props.showSideBySideDiff}
         onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
-        // Text files are shown in full above, so this is for other kinds
+        // Text files go to the Gitybara view above, so this is for other kinds
         showGitybara={false}
         onShowGitybaraChanged={this.onShowGitybaraChanged}
         hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}
         onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
         onDiffOptionsOpened={this.props.onDiffOptionsOpened}
+        viewController={this.diffViewController}
       />
     )
   }

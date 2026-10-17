@@ -10,6 +10,7 @@ import { WorkingDirectoryFileChange } from '../../models/status'
 import { Repository } from '../../models/repository'
 import { Dispatcher } from '../dispatcher'
 import { SeamlessDiffSwitcher } from '../diff/seamless-diff-switcher'
+import { DiffViewController } from '../diff/diff-view-controller'
 import { PopupType } from '../../models/popup'
 
 interface IChangesProps {
@@ -61,6 +62,8 @@ interface IChangesProps {
 }
 
 export class Changes extends React.Component<IChangesProps, {}> {
+  private readonly diffViewController = new DiffViewController()
+
   /**
    * Whether or not it's currently possible to change the line selection
    * of a diff. Changing selection is not possible while a commit is in
@@ -117,9 +120,11 @@ export class Changes extends React.Component<IChangesProps, {}> {
           hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}
           onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
           onDiffOptionsOpened={this.props.onDiffOptionsOpened}
+          viewController={this.diffViewController}
         />
 
         <SeamlessDiffSwitcher
+          viewController={this.diffViewController}
           repository={this.props.repository}
           imageDiffType={this.props.imageDiffType}
           file={this.props.file}

@@ -35,6 +35,7 @@ import { BinaryFile } from './binary-file'
 import { SideBySideDiff } from './side-by-side-diff'
 import { IFileContents } from './syntax-highlighting'
 import { SubmoduleDiff } from './submodule-diff'
+import { DiffViewController } from './diff-view-controller'
 import { Octicon } from '../octicons'
 import * as OcticonSymbol from '../octicons/octicons.generated'
 
@@ -133,6 +134,9 @@ interface IDiffProps {
 
   /** Called when the user changes the hide whitespace in diffs setting. */
   readonly onHideWhitespaceInDiffChanged: (checked: boolean) => void
+
+  /** Connects the controls in the header of the diff to it, if there are any */
+  readonly viewController?: DiffViewController
 }
 
 interface IDiffState {
@@ -392,6 +396,7 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
         }
         onHideWhitespaceInDiffChanged={this.props.onHideWhitespaceInDiffChanged}
         showDiffCheckMarks={this.props.showDiffCheckMarks}
+        viewController={this.props.viewController}
       />
     )
   }

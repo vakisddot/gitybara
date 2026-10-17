@@ -3,6 +3,7 @@ export type IdeShortcut =
   | 'previous-change'
   | 'next-change'
   | 'previous-lines'
+  | 'whole-file'
 
 /**
  * How long the key that shows the previous lines is held before it only shows
@@ -51,9 +52,9 @@ export function isTypingTarget(
 }
 
 /**
- * What a key press in the file viewer asks for, if anything. The keys to go to
- * the previous and the next change (W and S) and to show the previous lines (F)
- * are plain letters, so they are left alone where the letters are typed. The
+ * What a key press in the file viewer or a diff asks for, if anything. The keys
+ * to go to the previous and the next change (W and S), to show the previous
+ * lines (F) and to show the whole file (E) are plain letters, so they are left alone where the letters are typed. The
  * previous lines can be shown from there with Ctrl+' (Cmd+' on macOS).
  */
 export function getIdeShortcut(
@@ -92,6 +93,8 @@ export function getIdeShortcut(
       return 'next-change'
     case 'f':
       return 'previous-lines'
+    case 'e':
+      return 'whole-file'
     default:
       return null
   }

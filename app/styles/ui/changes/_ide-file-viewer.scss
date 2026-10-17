@@ -6,6 +6,51 @@
   margin-right: 6px;
 }
 
+// The buttons in the header of the Gitybara view, which the unified and split
+// diffs have too (see diff-view-controls.tsx)
+.ide-file-viewer-header-buttons {
+  display: flex;
+  flex-shrink: 0;
+  margin-right: var(--spacing-half);
+
+  .ide-file-viewer-header-button {
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    color: var(--text-secondary-color);
+    background: transparent;
+
+    // As specific as the hover of the buttons this is drawn over
+    &:not([aria-disabled='true']):hover {
+      color: var(--text-color);
+      background: var(--box-hover-background-color);
+    }
+  }
+}
+
+.ide-file-viewer-opacity {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-half);
+  margin-left: var(--spacing-half);
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+
+  input {
+    width: 72px;
+    margin: 0;
+    accent-color: var(--color-modified);
+  }
+
+  .ide-file-viewer-opacity-value {
+    min-width: 4ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 // The read-only file viewer shown next to the IDE view of the changes list
 .ide-file-viewer {
   background: var(--background-color);
@@ -105,26 +150,6 @@
     margin-right: var(--spacing-half);
   }
 
-  .ide-file-viewer-header-buttons {
-    display: flex;
-    flex-shrink: 0;
-    margin-right: var(--spacing-half);
-
-    .ide-file-viewer-header-button {
-      width: 24px;
-      height: 22px;
-      padding: 0;
-      border: 0;
-      color: var(--text-secondary-color);
-      background: transparent;
-
-      &:hover {
-        color: var(--text-color);
-        background: var(--box-hover-background-color);
-      }
-    }
-  }
-
   // The list of the keys of the viewer, see ide-keys-button.tsx
   .ide-keys-popover {
     width: 340px;
@@ -162,28 +187,6 @@
   .ide-file-viewer-message {
     padding: var(--spacing-double);
     color: var(--text-secondary-color);
-  }
-
-  .ide-file-viewer-opacity {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-half);
-    margin-left: var(--spacing-half);
-    color: var(--text-secondary-color);
-    font-size: var(--font-size-sm);
-    white-space: nowrap;
-
-    input {
-      width: 72px;
-      margin: 0;
-      accent-color: var(--color-modified);
-    }
-
-    .ide-file-viewer-opacity-value {
-      min-width: 4ch;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
   }
 
   .ide-file-viewer-banner {

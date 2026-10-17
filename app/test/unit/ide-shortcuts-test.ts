@@ -52,6 +52,12 @@ describe('getIdeShortcut', () => {
     assert.strictEqual(press(document.body, 'W'), 'previous-change')
   })
 
+  it('shows the whole file with E where letters are not typed', () => {
+    assert.strictEqual(press(document.body, 'e'), 'whole-file')
+    assert.strictEqual(press(document.body, 'e', { shiftKey: true }), null)
+    assert.strictEqual(press(create('input'), 'e'), null)
+  })
+
   it('leaves other keys alone', () => {
     assert.strictEqual(press(document.body, 'a'), null)
     assert.strictEqual(press(document.body, 'Enter'), null)

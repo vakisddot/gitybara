@@ -701,7 +701,7 @@ export class RepositoryView extends React.Component<
           imageDiffType={this.props.imageDiffType}
           hideWhitespaceInDiff={this.props.hideWhitespaceInChangesDiff}
           showSideBySideDiff={this.props.showSideBySideDiff}
-          // Text files are shown in full above, so this is for other kinds
+          // Text files go to the Gitybara view above, so this is for other kinds
           showGitybara={false}
           onShowGitybaraChanged={this.onShowGitybaraChanged}
           showDiffCheckMarks={this.props.showDiffCheckMarks}

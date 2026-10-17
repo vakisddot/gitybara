@@ -5,6 +5,8 @@ import { IDiff, DiffType } from '../../models/diff'
 import { Octicon, iconForStatus } from '../octicons'
 import { mapStatus } from '../../lib/status'
 import { DiffOptions } from './diff-options'
+import { DiffViewController } from './diff-view-controller'
+import { DiffViewControls } from './diff-view-controls'
 
 interface IDiffHeaderProps {
   readonly path: string
@@ -29,6 +31,9 @@ interface IDiffHeaderProps {
   /** Whether the Gitybara view is shown and how to change that, if offered. */
   readonly showGitybara?: boolean
   readonly onShowGitybaraChanged?: (showGitybara: boolean) => void
+
+  /** Connects the controls of the header to the diff below it, if any */
+  readonly viewController?: DiffViewController
 }
 
 /** Displays information about a file */
@@ -40,6 +45,10 @@ export class DiffHeader extends React.Component<IDiffHeaderProps, {}> {
     return (
       <div className="header">
         <PathLabel path={this.props.path} status={this.props.status} />
+
+        {this.props.viewController !== undefined && (
+          <DiffViewControls controller={this.props.viewController} />
+        )}
 
         {this.renderDiffOptions()}
 
