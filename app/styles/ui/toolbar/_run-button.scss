@@ -1,0 +1,11 @@
+// Fixed width, so the toolbar doesn't shift as the button changes state.
+.run-button-container {
+  display: flex;
+  flex: 0 0 auto;
+  width: 170px;
+
+  .title,
+  .description {
+    @include ellipsis;
+  }
+}

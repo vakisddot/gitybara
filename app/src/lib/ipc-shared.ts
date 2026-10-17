@@ -18,6 +18,7 @@ import { NotificationCallback } from 'desktop-notifications'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
 import { IGitHubDesktopRepository } from './github-desktop-import'
+import { IAppRunnerStatus, RunConfigResult } from './app-runner'
 import {
   ICSharpDocument,
   ICSharpHighlightResult,
@@ -33,6 +34,10 @@ import {
  * the two over the untyped IPC framework.
  */
 export type RequestChannels = {
+  'app-runner-status': (
+    repositoryPath: string,
+    status: IAppRunnerStatus
+  ) => void
   'csharp-close': (repositoryPath: string) => void
   'csharp-update': (document: ICSharpDocument) => void
   'csharp-refresh': (repositoryPath: string) => void
@@ -116,6 +121,13 @@ export type RequestChannels = {
  * Return signatures must be promises
  */
 export type RequestResponseChannels = {
+  'app-runner-get-config': (repositoryPath: string) => Promise<RunConfigResult>
+  'app-runner-get-status': (repositoryPath: string) => Promise<IAppRunnerStatus>
+  'app-runner-start': (
+    repositoryPath: string,
+    profileName: string
+  ) => Promise<void>
+  'app-runner-stop': (repositoryPath: string) => Promise<void>
   'read-github-desktop-repositories': () => Promise<
     ReadonlyArray<IGitHubDesktopRepository>
   >

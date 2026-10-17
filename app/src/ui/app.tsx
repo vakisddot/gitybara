@@ -56,6 +56,7 @@ import {
   BranchDropdown,
   WorktreeDropdown,
   RevertProgress,
+  RunButton,
 } from './toolbar'
 import { iconForRepository, OcticonSymbol } from './octicons'
 import * as octicons from './octicons/octicons.generated'
@@ -3824,6 +3825,24 @@ export class App extends React.Component<IAppProps, IAppState> {
     )
   }
 
+  private renderRunToolbarButton(): JSX.Element | null {
+    const selection = this.state.selectedState
+
+    if (selection == null || selection.type !== SelectionType.Repository) {
+      return null
+    }
+
+    const { repository } = selection
+
+    return (
+      <RunButton
+        key={repository.hash}
+        repositoryPath={repository.path}
+        enableFocusTrap={this.state.currentPopup === null}
+      />
+    )
+  }
+
   private renderWorktreeToolbarButton(): JSX.Element | null {
     if (!enableWorktreeSupport()) {
       return null
@@ -3948,6 +3967,7 @@ export class App extends React.Component<IAppProps, IAppState> {
         {this.renderWorktreeToolbarButton()}
         {this.renderBranchToolbarButton()}
         {this.renderPushPullToolbarButton()}
+        {this.renderRunToolbarButton()}
       </Toolbar>
     )
   }

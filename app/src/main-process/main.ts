@@ -40,6 +40,7 @@ import { createAuthenticatedImageTokenResolver } from './authenticated-image-tok
 import { installAliveOriginFilter } from './alive-origin-filter'
 import { installSameOriginFilter } from './same-origin-filter'
 import * as ipcMain from './ipc-main'
+import { installAppRunnerHandlers } from './app-runner'
 import { installCSharpHandlers } from './csharp'
 import { installGitHubDesktopImportHandler } from './github-desktop-import'
 import {
@@ -329,6 +330,7 @@ app.on('ready', () => {
   }
 
   readyTime = now() - launchTime
+  installAppRunnerHandlers()
   installCSharpHandlers()
   installGitHubDesktopImportHandler()
 
