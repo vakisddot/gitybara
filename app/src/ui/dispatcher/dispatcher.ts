@@ -2429,9 +2429,9 @@ export class Dispatcher {
     return this.appStore._setShowSideBySideDiff(showSideBySideDiff)
   }
 
-  /** Change the setting to show the whole file instead of the diff */
-  public onShowFullFileDiffChanged(showFullFileDiff: boolean) {
-    return this.appStore._setShowFullFileDiff(showFullFileDiff)
+  /** Change the setting to show diffs in the Gitybara view */
+  public onShowGitybaraDiffChanged(showGitybaraDiff: boolean) {
+    return this.appStore._setShowGitybaraDiff(showGitybaraDiff)
   }
 
   /** Install the global Git LFS filters. */

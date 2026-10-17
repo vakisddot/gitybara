@@ -74,8 +74,8 @@ interface ISelectedCommitsProps {
   /** Whether we should display side by side diffs. */
   readonly showSideBySideDiff: boolean
 
-  /** Whether to show the whole file instead of the diff */
-  readonly showFullFileDiff: boolean
+  /** Whether to show diffs in the Gitybara view */
+  readonly showGitybaraDiff: boolean
 
   /** The width of a tab character, in characters. */
   readonly tabSize: number
@@ -197,16 +197,17 @@ export class SelectedCommits extends React.Component<
       )
     }
 
-    // The whole file as it was in the last of the commits, where it's text
+    // The Gitybara view of the file as it was in the last of the commits, where
+    // it's text
     const latestSha = this.getLatestSha()
     if (
-      this.props.showFullFileDiff &&
+      this.props.showGitybaraDiff &&
       diff?.kind === DiffType.Text &&
       latestSha !== null
     ) {
       return (
         <IdeFileViewer
-          key="history-full-file"
+          key="history-gitybara-diff"
           repository={this.props.repository}
           path={file.path}
           changedFiles={[]}
@@ -222,8 +223,8 @@ export class SelectedCommits extends React.Component<
               }
               showSideBySideDiff={this.props.showSideBySideDiff}
               onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
-              showFullFile={this.props.showFullFileDiff}
-              onShowFullFileChanged={this.onShowFullFileChanged}
+              showGitybara={this.props.showGitybaraDiff}
+              onShowGitybaraChanged={this.onShowGitybaraChanged}
               onDiffOptionsOpened={this.props.onDiffOptionsOpened}
             />
           }
@@ -268,8 +269,8 @@ export class SelectedCommits extends React.Component<
         showSideBySideDiff={this.props.showSideBySideDiff}
         onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
         // Text files are shown in full above, so this is for other kinds
-        showFullFile={false}
-        onShowFullFileChanged={this.onShowFullFileChanged}
+        showGitybara={false}
+        onShowGitybaraChanged={this.onShowGitybaraChanged}
         hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}
         onHideWhitespaceInDiffChanged={this.onHideWhitespaceInDiffChanged}
         onDiffOptionsOpened={this.props.onDiffOptionsOpened}
@@ -325,12 +326,12 @@ export class SelectedCommits extends React.Component<
     this.props.dispatcher.onShowSideBySideDiffChanged(showSideBySideDiff)
   }
 
-  private onShowFullFileChanged = (showFullFile: boolean) => {
-    this.props.dispatcher.onShowFullFileDiffChanged(showFullFile)
+  private onShowGitybaraChanged = (showGitybara: boolean) => {
+    this.props.dispatcher.onShowGitybaraDiffChanged(showGitybara)
   }
 
   /**
-   * The newest of the commits in the diff, which is the one the whole file is
+   * The newest of the commits in the diff, which is the one the file is
    * shown as it was in. It's the one that none of the others has as a parent.
    */
   private getLatestSha(): string | null {

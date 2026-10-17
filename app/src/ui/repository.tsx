@@ -58,7 +58,7 @@ interface IRepositoryViewProps {
   readonly hideWhitespaceInChangesDiff: boolean
   readonly hideWhitespaceInHistoryDiff: boolean
   readonly showSideBySideDiff: boolean
-  readonly showFullFileDiff: boolean
+  readonly showGitybaraDiff: boolean
   readonly showDiffCheckMarks: boolean
   readonly preferAbsoluteDates: boolean
   readonly askForConfirmationOnDiscardChanges: boolean
@@ -588,7 +588,7 @@ export class RepositoryView extends React.Component<
         onViewCommitOnGitHub={this.props.onViewCommitOnGitHub}
         hideWhitespaceInDiff={this.props.hideWhitespaceInHistoryDiff}
         showSideBySideDiff={this.props.showSideBySideDiff}
-        showFullFileDiff={this.props.showFullFileDiff}
+        showGitybaraDiff={this.props.showGitybaraDiff}
         tabSize={this.props.selectedTabSize}
         onOpenBinaryFile={this.onOpenBinaryFile}
         onOpenSubmodule={this.onOpenSubmodule}
@@ -676,11 +676,11 @@ export class RepositoryView extends React.Component<
         return null
       }
 
-      // Show the whole file, as the IDE view does, where there is text to show
-      if (this.props.showFullFileDiff && diff?.kind === DiffType.Text) {
+      // Show the Gitybara view where there is text to show
+      if (this.props.showGitybaraDiff && diff?.kind === DiffType.Text) {
         return (
           <IdeFileViewer
-            key="full-file-diff"
+            key="gitybara-diff"
             repository={this.props.repository}
             path={selectedFile.path}
             changedFiles={workingDirectory.files}
@@ -702,8 +702,8 @@ export class RepositoryView extends React.Component<
           hideWhitespaceInDiff={this.props.hideWhitespaceInChangesDiff}
           showSideBySideDiff={this.props.showSideBySideDiff}
           // Text files are shown in full above, so this is for other kinds
-          showFullFile={false}
-          onShowFullFileChanged={this.onShowFullFileChanged}
+          showGitybara={false}
+          onShowGitybaraChanged={this.onShowGitybaraChanged}
           showDiffCheckMarks={this.props.showDiffCheckMarks}
           onOpenBinaryFile={this.onOpenBinaryFile}
           onOpenSubmodule={this.onOpenSubmodule}
@@ -725,8 +725,8 @@ export class RepositoryView extends React.Component<
         onHideWhitespaceChangesChanged={this.onHideWhitespaceInDiffChanged}
         showSideBySideDiff={this.props.showSideBySideDiff}
         onShowSideBySideDiffChanged={this.onShowSideBySideDiffChanged}
-        showFullFile={this.props.showFullFileDiff}
-        onShowFullFileChanged={this.onShowFullFileChanged}
+        showGitybara={this.props.showGitybaraDiff}
+        onShowGitybaraChanged={this.onShowGitybaraChanged}
         onDiffOptionsOpened={this.onDiffOptionsOpened}
       />
     )
@@ -736,8 +736,8 @@ export class RepositoryView extends React.Component<
     this.props.dispatcher.onShowSideBySideDiffChanged(showSideBySideDiff)
   }
 
-  private onShowFullFileChanged = (showFullFile: boolean) => {
-    this.props.dispatcher.onShowFullFileDiffChanged(showFullFile)
+  private onShowGitybaraChanged = (showGitybara: boolean) => {
+    this.props.dispatcher.onShowGitybaraDiffChanged(showGitybara)
   }
 
   private onOpenBinaryFile = (fullPath: string) => {

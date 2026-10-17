@@ -4022,7 +4022,7 @@ export class App extends React.Component<IAppProps, IAppState> {
           showDiffCheckMarks={state.showDiffCheckMarks}
           preferAbsoluteDates={state.preferAbsoluteDates}
           showSideBySideDiff={state.showSideBySideDiff}
-          showFullFileDiff={state.showFullFileDiff}
+          showGitybaraDiff={state.showGitybaraDiff}
           focusCommitMessage={state.focusCommitMessage}
           askForConfirmationOnDiscardChanges={
             state.askForConfirmationOnDiscardChanges

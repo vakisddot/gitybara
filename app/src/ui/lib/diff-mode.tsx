@@ -1,8 +1,10 @@
 import { getBoolean, setBoolean } from '../../lib/local-storage'
 
 export const ShowSideBySideDiffDefault = false
-export const ShowFullFileDiffDefault = false
-const showFullFileDiffKey = 'show-full-file-diff'
+export const ShowGitybaraDiffDefault = false
+// The key is from when the Gitybara view was called Full file, so that the
+// choice carries over
+const showGitybaraDiffKey = 'show-full-file-diff'
 const showSideBySideDiffKey = 'show-side-by-side-diff'
 
 /**
@@ -22,13 +24,13 @@ export function setShowSideBySideDiff(showSideBySideDiff: boolean) {
 }
 
 /**
- * Gets a value indicating whether to show the whole file, like the IDE view
- * does, instead of the diff of the changes to it.
+ * Gets a value indicating whether to show diffs in the Gitybara view, the
+ * editor of the IDE view, instead of the unified or split view.
  */
-export function getShowFullFileDiff(): boolean {
-  return getBoolean(showFullFileDiffKey, ShowFullFileDiffDefault)
+export function getShowGitybaraDiff(): boolean {
+  return getBoolean(showGitybaraDiffKey, ShowGitybaraDiffDefault)
 }
 
-export function setShowFullFileDiff(showFullFileDiff: boolean) {
-  setBoolean(showFullFileDiffKey, showFullFileDiff)
+export function setShowGitybaraDiff(showGitybaraDiff: boolean) {
+  setBoolean(showGitybaraDiffKey, showGitybaraDiff)
 }

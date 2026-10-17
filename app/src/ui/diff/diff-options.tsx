@@ -22,11 +22,11 @@ interface IDiffOptionsProps {
   readonly onShowSideBySideDiffChanged: (showSideBySideDiff: boolean) => void
 
   /**
-   * Whether the whole file is shown instead of the diff. The option to do so
-   * is only offered where the view can, so it needs both of these.
+   * Whether diffs are shown in the Gitybara view. The option to do so is only
+   * offered where the view can show it, so it needs both of these.
    */
-  readonly showFullFile?: boolean
-  readonly onShowFullFileChanged?: (showFullFile: boolean) => void
+  readonly showGitybara?: boolean
+  readonly onShowGitybaraChanged?: (showGitybara: boolean) => void
 
   /** Called when the user opens the diff options popover */
   readonly onDiffOptionsOpened: () => void
@@ -133,23 +133,23 @@ export class DiffOptions extends React.Component<
     )
   }
 
-  private get isFullFileShown() {
+  private get isGitybaraShown() {
     return (
-      this.props.onShowFullFileChanged !== undefined &&
-      this.props.showFullFile === true
+      this.props.onShowGitybaraChanged !== undefined &&
+      this.props.showGitybara === true
     )
   }
 
   private onUnifiedSelected = () => {
-    this.props.onShowFullFileChanged?.(false)
+    this.props.onShowGitybaraChanged?.(false)
     this.props.onShowSideBySideDiffChanged(false)
   }
   private onSideBySideSelected = () => {
-    this.props.onShowFullFileChanged?.(false)
+    this.props.onShowGitybaraChanged?.(false)
     this.props.onShowSideBySideDiffChanged(true)
   }
-  private onFullFileSelected = () => {
-    this.props.onShowFullFileChanged?.(true)
+  private onGitybaraSelected = () => {
+    this.props.onShowGitybaraChanged?.(true)
   }
 
   private renderShowSideBySide() {
@@ -158,13 +158,13 @@ export class DiffOptions extends React.Component<
         <legend>Diff display</legend>
         <RadioButton
           value="Unified"
-          checked={!this.props.showSideBySideDiff && !this.isFullFileShown}
+          checked={!this.props.showSideBySideDiff && !this.isGitybaraShown}
           label="Unified"
           onSelected={this.onUnifiedSelected}
         />
         <RadioButton
           value="Split"
-          checked={this.props.showSideBySideDiff && !this.isFullFileShown}
+          checked={this.props.showSideBySideDiff && !this.isGitybaraShown}
           label={
             <>
               <div>Split</div>
@@ -172,12 +172,12 @@ export class DiffOptions extends React.Component<
           }
           onSelected={this.onSideBySideSelected}
         />
-        {this.props.onShowFullFileChanged !== undefined && (
+        {this.props.onShowGitybaraChanged !== undefined && (
           <RadioButton
-            value="Full file"
-            checked={this.isFullFileShown}
-            label="Full file"
-            onSelected={this.onFullFileSelected}
+            value="Gitybara"
+            checked={this.isGitybaraShown}
+            label="Gitybara"
+            onSelected={this.onGitybaraSelected}
           />
         )}
       </fieldset>

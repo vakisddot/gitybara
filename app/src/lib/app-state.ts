@@ -307,8 +307,8 @@ export interface IAppState {
   /** Whether we should show side by side diffs */
   readonly showSideBySideDiff: boolean
 
-  /** Whether to show the whole file, like the IDE view, instead of the diff */
-  readonly showFullFileDiff: boolean
+  /** Whether to show diffs in the Gitybara view, the editor of the IDE view */
+  readonly showGitybaraDiff: boolean
 
   /** The user's preferred shell. */
   readonly selectedShell: Shell

@@ -374,9 +374,9 @@ import {
   ShowSideBySideDiffDefault,
   getShowSideBySideDiff,
   setShowSideBySideDiff,
-  ShowFullFileDiffDefault,
-  getShowFullFileDiff,
-  setShowFullFileDiff,
+  ShowGitybaraDiffDefault,
+  getShowGitybaraDiff,
+  setShowGitybaraDiff,
 } from '../../ui/lib/diff-mode'
 import {
   abortCherryPick,
@@ -691,7 +691,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   /** Whether or not the spellchecker is enabled for commit summary and description */
   private commitSpellcheckEnabled: boolean = commitSpellcheckEnabledDefault
   private showSideBySideDiff: boolean = ShowSideBySideDiffDefault
-  private showFullFileDiff: boolean = ShowFullFileDiffDefault
+  private showGitybaraDiff: boolean = ShowGitybaraDiffDefault
 
   private uncommittedChangesStrategy = defaultUncommittedChangesStrategy
 
@@ -1320,7 +1320,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       hideWhitespaceInHistoryDiff: this.hideWhitespaceInHistoryDiff,
       hideWhitespaceInPullRequestDiff: this.hideWhitespaceInPullRequestDiff,
       showSideBySideDiff: this.showSideBySideDiff,
-      showFullFileDiff: this.showFullFileDiff,
+      showGitybaraDiff: this.showGitybaraDiff,
       selectedShell: this.selectedShell,
       repositoryFilterText: this.repositoryFilterText,
       resolvedExternalEditor: this.resolvedExternalEditor,
@@ -2649,7 +2649,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       commitSpellcheckEnabledDefault
     )
     this.showSideBySideDiff = getShowSideBySideDiff()
-    this.showFullFileDiff = getShowFullFileDiff()
+    this.showGitybaraDiff = getShowGitybaraDiff()
 
     this.selectedTheme = getPersistedThemeName()
     // Make sure the persisted theme is applied
@@ -8072,10 +8072,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
   }
 
-  public _setShowFullFileDiff(showFullFileDiff: boolean) {
-    if (showFullFileDiff !== this.showFullFileDiff) {
-      setShowFullFileDiff(showFullFileDiff)
-      this.showFullFileDiff = showFullFileDiff
+  public _setShowGitybaraDiff(showGitybaraDiff: boolean) {
+    if (showGitybaraDiff !== this.showGitybaraDiff) {
+      setShowGitybaraDiff(showGitybaraDiff)
+      this.showGitybaraDiff = showGitybaraDiff
       this.emitUpdate()
     }
   }
