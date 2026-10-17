@@ -277,6 +277,31 @@
       opacity: 1;
     }
 
+    // The unchanged lines that the Gitybara view collapses, drawn like the
+    // expanders between the hunks of a diff. The gutter would show the number
+    // of the first hidden line, so it is left empty.
+    .ide-collapsed-line {
+      background: var(--diff-hunk-background-color);
+
+      .CodeMirror-gutter-wrapper {
+        visibility: hidden;
+      }
+    }
+
+    .CodeMirror .ide-collapsed-line pre.CodeMirror-line > span {
+      opacity: 1;
+    }
+
+    .ide-collapsed-lines {
+      color: var(--diff-hunk-text-color);
+      cursor: pointer;
+
+      &:hover {
+        color: var(--text-color);
+        text-decoration: underline;
+      }
+    }
+
     // What matches a search has to be readable wherever it is
     .ide-code-editor.is-searching .CodeMirror pre.CodeMirror-line > span {
       opacity: 1;

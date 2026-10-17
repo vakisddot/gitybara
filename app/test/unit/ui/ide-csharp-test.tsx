@@ -45,6 +45,7 @@ const props: React.ComponentProps<typeof IdeCodeEditor> = {
   highlightChanges: false,
   unchangedTextOpacity: 100,
   showPreviousLines: false,
+  collapsedRanges: [],
   repositoryPath: 'D:/source',
   onDirtyChange: () => {},
   onSave: () => {},

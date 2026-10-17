@@ -686,6 +686,7 @@ export class RepositoryView extends React.Component<
             changedFiles={workingDirectory.files}
             tabSize={this.props.selectedTabSize}
             readOnly={true}
+            collapseUnchangedLines={true}
             headerExtras={this.renderChangesDiffOptions()}
           />
         )

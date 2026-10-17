@@ -123,6 +123,7 @@ describe('Previous lines display', () => {
       highlightChanges: true,
       unchangedTextOpacity: 0,
       showPreviousLines: true,
+      collapsedRanges: [],
       onDirtyChange: dirty => dirtyChanges.push(dirty),
       onSave: () => {},
     }
@@ -202,6 +203,7 @@ describe('Previous lines display', () => {
       highlightChanges: true,
       unchangedTextOpacity: 0,
       showPreviousLines: false,
+      collapsedRanges: [],
       onDirtyChange: dirty => dirtyChanges.push(dirty),
       onSave: () => {},
     }

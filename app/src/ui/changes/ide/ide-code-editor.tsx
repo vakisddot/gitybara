@@ -13,7 +13,7 @@ import {
   getIndentGuidesStyle,
   getLineIndentation,
 } from './ide-indentation'
-import { IInlineChange, ILineChanges } from './ide-line-changes'
+import { IInlineChange, ILineChanges, ILineRange } from './ide-line-changes'
 import { IdePreviousLines } from './ide-previous-lines'
 import * as ipcRenderer from '../../../lib/ipc-renderer'
 import { getCSharpTokenClass } from '../../../lib/csharp/semantic-tokens'
@@ -96,6 +96,12 @@ interface IIdeCodeEditorProps {
   /** Whether to show the lines that were removed or replaced */
   readonly showPreviousLines: boolean
 
+  /**
+   * The unchanged lines to hide behind a line that says how many there are,
+   * which shows them again when it's clicked.
+   */
+  readonly collapsedRanges: ReadonlyArray<ILineRange>
+
   /** Called when the text starts or stops differing from the saved text. */
   readonly onDirtyChange: (isDirty: boolean) => void
 
@@ -167,6 +173,10 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     readonly where: 'gutter' | 'background' | 'text'
     readonly className: string
   }>()
+
+  /** The unchanged lines that were collapsed, and the marks that hide them */
+  private collapsedRanges: ReadonlyArray<ILineRange> = []
+  private collapsedMarks = new Array<CodeMirror.TextMarker>()
 
   /** Marks over the scroll bar for the lines that have changes */
   private ruler: HTMLDivElement | null = null
@@ -312,6 +322,8 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     if (prevProps.navigationPosition !== this.props.navigationPosition) {
       this.applyNavigationPosition()
     }
+
+    this.collapseLines()
   }
 
   public componentWillUnmount() {
@@ -677,13 +689,13 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.lastJump = { line, top: editor.getScrollInfo().top }
   }
 
-  /** Unfold the blocks that hide the line. */
+  /** Unfold the blocks and show the collapsed lines that hide the line. */
   private unfoldLine(line: number) {
     const editor = this.editor
 
     editor?.operation(() => {
       for (const mark of editor.findMarksAt(CodeMirror.Pos(line, 0))) {
-        if (isFoldMark(mark)) {
+        if (isFoldMark(mark) || this.collapsedMarks.includes(mark)) {
           mark.clear()
         }
       }
@@ -1007,6 +1019,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.changeClasses = []
     this.previousLines?.clear()
     this.clearInlineChanges()
+    this.clearCollapsedLines()
 
     editor.operation(() => {
       editor.setValue(text)
@@ -1028,7 +1041,60 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     this.updateDirty()
     this.markChanges()
+    this.collapseLines()
     this.scheduleSemanticHighlight()
+  }
+
+  /**
+   * Hide the lines of the collapsed ranges. Nothing is done while the ranges
+   * stay the same, so lines that were shown by a click stay shown when the
+   * changes of the file are worked out again.
+   */
+  private collapseLines() {
+    const editor = this.editor
+    const ranges = this.props.collapsedRanges
+
+    if (editor === null || isSameRanges(ranges, this.collapsedRanges)) {
+      return
+    }
+
+    this.clearCollapsedLines()
+    this.collapsedRanges = ranges
+    const lineCount = editor.lineCount()
+
+    editor.operation(() => {
+      for (const { start, end } of ranges) {
+        if (end >= lineCount) {
+          continue
+        }
+
+        const widget = document.createElement('span')
+        widget.className = 'ide-collapsed-lines'
+        widget.textContent = `⋯ ${end - start + 1} unchanged lines`
+        widget.title = 'Show the unchanged lines'
+
+        // The line of the widget is the first of the range, which isn't shown
+        const handle = editor.addLineClass(start, 'wrap', 'ide-collapsed-line')
+        const mark = editor.markText(
+          CodeMirror.Pos(start, 0),
+          CodeMirror.Pos(end),
+          { replacedWith: widget, inclusiveLeft: true, inclusiveRight: true }
+        )
+        CodeMirror.on(mark, 'clear', () =>
+          editor.removeLineClass(handle, 'wrap', 'ide-collapsed-line')
+        )
+        widget.addEventListener('click', () => mark.clear())
+        this.collapsedMarks.push(mark)
+      }
+    })
+  }
+
+  private clearCollapsedLines() {
+    const marks = this.collapsedMarks
+
+    this.collapsedMarks = []
+    this.collapsedRanges = []
+    this.editor?.operation(() => marks.forEach(mark => mark.clear()))
   }
 
   private async applyMode() {
@@ -1197,6 +1263,16 @@ function markSearchMatch(
   return editor.markText(from, to, {
     className: isCurrent ? 'ide-search-current' : 'ide-search-match',
   })
+}
+
+function isSameRanges(
+  a: ReadonlyArray<ILineRange>,
+  b: ReadonlyArray<ILineRange>
+) {
+  return (
+    a.length === b.length &&
+    a.every((range, i) => range.start === b[i].start && range.end === b[i].end)
+  )
 }
 
 function isFoldMark(mark: CodeMirror.TextMarker): boolean {

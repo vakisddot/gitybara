@@ -322,3 +322,61 @@ export function getAdjacentChangeStart(
     : [...starts].reverse().find(start => start < reference) ??
         starts[starts.length - 1]
 }
+
+/** Lines next to each other, from the start to the end line, both included */
+export interface ILineRange {
+  readonly start: number
+  readonly end: number
+}
+
+/** How many unchanged lines a diff shows around a change */
+export const DiffContextLines = 3
+
+/**
+ * The unchanged lines that a diff wouldn't show, which are more than the
+ * context lines away from any change. A single line is left in, as hiding it
+ * takes as much room as showing it. There are none when nothing changed.
+ */
+export function getCollapsibleRanges(
+  changes: ILineChanges,
+  lineCount: number,
+  context = DiffContextLines
+): ReadonlyArray<ILineRange> {
+  const shown = new Array<boolean>(lineCount).fill(false)
+  const show = (from: number, to: number) => {
+    for (
+      let line = Math.max(0, from);
+      line <= Math.min(to, lineCount - 1);
+      line++
+    ) {
+      shown[line] = true
+    }
+  }
+
+  changes.added.forEach(line => show(line - context, line + context))
+  changes.modified.forEach(line => show(line - context, line + context))
+  // The lines were removed between this line and the one before it
+  changes.removedBefore.forEach(line =>
+    show(line - context, line + context - 1)
+  )
+
+  if (!shown.includes(true)) {
+    return []
+  }
+
+  const ranges = new Array<ILineRange>()
+  let start: number | null = null
+
+  for (let line = 0; line <= lineCount; line++) {
+    if (line < lineCount && !shown[line]) {
+      start = start ?? line
+    } else if (start !== null) {
+      if (line - start > 1) {
+        ranges.push({ start, end: line - 1 })
+      }
+      start = null
+    }
+  }
+
+  return ranges
+}

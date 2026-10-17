@@ -10,6 +10,7 @@ import {
 } from '../../src/models/diff'
 import {
   getAdjacentChangeStart,
+  getCollapsibleRanges,
   getChangeGroupStarts,
   getLineChanges,
   ILineChanges,
@@ -427,6 +428,42 @@ describe('ide-line-changes', () => {
     it('goes around from the last change to the first and back', () => {
       assert.strictEqual(getAdjacentChangeStart(starts, 20, 1), 3)
       assert.strictEqual(getAdjacentChangeStart(starts, 3, -1), 20)
+    })
+  })
+
+  describe('getCollapsibleRanges', () => {
+    const changes = (
+      added: number[],
+      removedBefore: number[] = []
+    ): ILineChanges => ({
+      ...NoLineChanges,
+      added: new Set(added),
+      removedBefore: new Set(removedBefore),
+    })
+
+    it('leaves three lines around each change', () => {
+      assert.deepStrictEqual(getCollapsibleRanges(changes([10, 30]), 50), [
+        { start: 0, end: 6 },
+        { start: 14, end: 26 },
+        { start: 34, end: 49 },
+      ])
+    })
+
+    it('leaves three lines on each side of removed lines', () => {
+      // Removed between lines 9 and 10, so 7 to 9 and 10 to 12 stay
+      assert.deepStrictEqual(getCollapsibleRanges(changes([], [10]), 20), [
+        { start: 0, end: 6 },
+        { start: 13, end: 19 },
+      ])
+    })
+
+    it('does not hide a single line', () => {
+      // Line 7 is the only one between the context of the two changes
+      assert.deepStrictEqual(getCollapsibleRanges(changes([3, 11]), 15), [])
+    })
+
+    it('hides nothing when nothing changed', () => {
+      assert.deepStrictEqual(getCollapsibleRanges(NoLineChanges, 100), [])
     })
   })
 })

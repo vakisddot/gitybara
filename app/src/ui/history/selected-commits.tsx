@@ -215,6 +215,7 @@ export class SelectedCommits extends React.Component<
           changedFiles={[]}
           tabSize={this.props.tabSize}
           readOnly={true}
+          collapseUnchangedLines={true}
           commit={{ sha: latestSha, diff, status: file.status }}
           headerExtras={
             <DiffOptions

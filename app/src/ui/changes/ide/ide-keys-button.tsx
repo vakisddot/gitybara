@@ -13,6 +13,9 @@ interface IIdeKeysButtonProps {
   /** Whether the file can be edited, which is where letters are typed */
   readonly canEdit: boolean
   readonly canNavigate?: boolean
+
+  /** Whether unchanged lines are collapsed, which E shows or collapses again */
+  readonly canExpandWholeFile?: boolean
 }
 
 interface IIdeKeysButtonState {
@@ -22,7 +25,11 @@ interface IIdeKeysButtonState {
 const Modifier = __DARWIN__ ? 'Cmd' : 'Ctrl'
 
 /** The keys of the file viewer, see ide-shortcuts.ts */
-function getShortcuts(canEdit: boolean, canNavigate: boolean) {
+function getShortcuts(
+  canEdit: boolean,
+  canNavigate: boolean,
+  canExpandWholeFile: boolean
+) {
   const shortcuts = [
     { keys: ['F'], action: 'Show or hide the previous lines' },
     { keys: ['Hold F'], action: 'Show the previous lines while it’s held' },
@@ -33,6 +40,12 @@ function getShortcuts(canEdit: boolean, canNavigate: boolean) {
     { keys: ['W', 'S'], action: 'Go to the previous or the next change' },
     { keys: [`${Modifier}+F`], action: 'Find in the file' },
   ]
+  if (canExpandWholeFile) {
+    shortcuts.push({
+      keys: ['E'],
+      action: 'Show the whole file, or collapse the unchanged lines',
+    })
+  }
   if (canNavigate) {
     shortcuts.push(
       { keys: ['F12', `${Modifier}+click`], action: 'Go to definition' },
@@ -93,7 +106,8 @@ export class IdeKeysButton extends React.Component<
         <dl>
           {getShortcuts(
             this.props.canEdit,
-            this.props.canNavigate === true
+            this.props.canNavigate === true,
+            this.props.canExpandWholeFile === true
           ).map(({ keys, action }) => (
             <React.Fragment key={action}>
               <dt>

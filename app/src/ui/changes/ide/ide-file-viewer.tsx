@@ -42,6 +42,7 @@ import {
 import {
   getAdjacentChangeStart,
   getChangeGroupStarts,
+  getCollapsibleRanges,
   getLineChanges,
   ILineChanges,
   isSameLineChanges,
@@ -105,6 +106,12 @@ interface IIdeFileViewerProps {
   readonly readOnly?: boolean
 
   /**
+   * Whether to collapse the unchanged lines away from the changes, as a diff
+   * does, until the whole file is asked for. The Gitybara view does this.
+   */
+  readonly collapseUnchangedLines?: boolean
+
+  /**
    * Show the file as it was in this commit. The file is then never read again
    * and the changed files aren't looked at.
    */
@@ -144,6 +151,9 @@ interface IIdeFileViewerState {
 
   /** Whether the lines that were removed or replaced are shown */
   readonly showPreviousLines: boolean
+
+  /** Whether the whole file is shown where unchanged lines are collapsed */
+  readonly isWholeFileExpanded: boolean
 
   /** Whether the box to search the file is shown, and what it announced */
   readonly isSearching: boolean
@@ -188,6 +198,7 @@ export class IdeFileViewer extends React.Component<
   } | null = null
 
   private getChangeStarts = memoizeOne(getChangeGroupStarts)
+  private getCollapsibleRanges = memoizeOne(getCollapsibleRanges)
 
   private getFoldRangeCount = memoizeOne(
     (lines: ReadonlyArray<string>, tabSize: number) =>
@@ -213,6 +224,7 @@ export class IdeFileViewer extends React.Component<
       saveError: null,
       highlightChanges: getBoolean(HighlightChangesKey, false),
       showPreviousLines: previousLinesSwitchedOn,
+      isWholeFileExpanded: false,
       unchangedTextOpacity: getUnchangedTextOpacity(),
       isSearching: false,
       searchMessage: '',
@@ -272,6 +284,7 @@ export class IdeFileViewer extends React.Component<
         isDirty: false,
         changedOnDisk: false,
         saveError: null,
+        isWholeFileExpanded: false,
         isSearching: false,
         searchMessage: '',
         csharpStatus: '',
@@ -574,6 +587,27 @@ export class IdeFileViewer extends React.Component<
     return true
   }
 
+  /** The unchanged lines that are hidden, which are none in the whole file */
+  private getCollapsedRanges(lines: ReadonlyArray<string>) {
+    return this.props.collapseUnchangedLines !== true ||
+      this.state.isWholeFileExpanded
+      ? []
+      : this.getCollapsibleRanges(this.state.lineChanges, lines.length)
+  }
+
+  /** Whether there are unchanged lines to show or to collapse again */
+  private canToggleWholeFile() {
+    const lines = this.getLines()
+
+    return (
+      this.props.collapseUnchangedLines === true &&
+      lines !== null &&
+      (this.state.isWholeFileExpanded ||
+        this.getCollapsibleRanges(this.state.lineChanges, lines.length).length >
+          0)
+    )
+  }
+
   /** Whether the editor takes no typing, because of how it's shown. */
   private isEditorReadOnly() {
     const { contents } = this.state
@@ -604,6 +638,12 @@ export class IdeFileViewer extends React.Component<
       case 'previous-lines':
         if (this.pressPreviousLinesKey(event)) {
           event.preventDefault()
+        }
+        break
+      case 'whole-file':
+        if (!event.repeat && this.canToggleWholeFile()) {
+          event.preventDefault()
+          this.onToggleWholeFile()
         }
         break
     }
@@ -711,6 +751,11 @@ export class IdeFileViewer extends React.Component<
     setUnchangedTextOpacity(unchangedTextOpacity)
     this.setState({ unchangedTextOpacity })
   }
+
+  private onToggleWholeFile = () =>
+    this.setState(state => ({
+      isWholeFileExpanded: !state.isWholeFileExpanded,
+    }))
 
   private onPreviousChange = () => this.goToChange(-1)
   private onNextChange = () => this.goToChange(1)
@@ -947,6 +992,37 @@ export class IdeFileViewer extends React.Component<
     )
   }
 
+  /** The button that shows the whole file, as in the unified and split diffs */
+  private renderWholeFileButton() {
+    if (
+      this.props.collapseUnchangedLines !== true ||
+      this.getLines() === null
+    ) {
+      return null
+    }
+
+    const { isWholeFileExpanded } = this.state
+    const label = isWholeFileExpanded
+      ? 'Collapse unchanged lines'
+      : 'Expand whole file'
+
+    return (
+      <div className="ide-file-viewer-header-buttons">
+        <Button
+          className="ide-file-viewer-header-button"
+          onClick={this.onToggleWholeFile}
+          disabled={!this.canToggleWholeFile()}
+          tooltip={`${label} (E)`}
+          ariaLabel={label}
+        >
+          <Octicon
+            symbol={isWholeFileExpanded ? octicons.fold : octicons.unfold}
+          />
+        </Button>
+      </div>
+    )
+  }
+
   private renderFoldButtons() {
     const lines = this.getLines()
 
@@ -1028,6 +1104,7 @@ export class IdeFileViewer extends React.Component<
           </>
         )}
         {this.renderChangeNavigation()}
+        {this.renderWholeFileButton()}
         {this.renderFoldButtons()}
         {this.hasCSharpSupport(path) && this.state.csharpStatus !== '' && (
           <span className="ide-csharp-status" role="status">
@@ -1041,6 +1118,7 @@ export class IdeFileViewer extends React.Component<
             <IdeKeysButton
               canEdit={!this.isEditorReadOnly()}
               canNavigate={this.hasCSharpSupport(path)}
+              canExpandWholeFile={this.props.collapseUnchangedLines === true}
             />
           </div>
         )}
@@ -1146,6 +1224,7 @@ export class IdeFileViewer extends React.Component<
             highlightChanges={this.state.highlightChanges}
             unchangedTextOpacity={this.state.unchangedTextOpacity}
             showPreviousLines={this.state.showPreviousLines}
+            collapsedRanges={this.getCollapsedRanges(lines)}
             lineChanges={lineChanges}
             onDirtyChange={this.onDirtyChange}
             onSave={this.onSave}
