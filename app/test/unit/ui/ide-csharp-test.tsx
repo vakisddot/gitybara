@@ -288,6 +288,26 @@ describe('C# editor integration', () => {
     view.unmount()
   })
 
+  it('shows the words as links only while Ctrl is held', async () => {
+    mock.method(ipcRenderer, 'invoke', async () => highlighted)
+    const view = render(<IdeCodeEditor {...props} />)
+    const wrapper = view.container.querySelector('.CodeMirror')
+    assert.ok(wrapper)
+    const isNavigable = () => wrapper.classList.contains('ide-csharp-navigable')
+
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
+    assert.ok(isNavigable())
+    fireEvent.keyUp(window, { key: 'Control', ctrlKey: false })
+    assert.ok(!isNavigable())
+
+    // Ctrl pressed in another window is seen when the mouse moves
+    fireEvent.mouseMove(wrapper, { ctrlKey: true })
+    assert.ok(isNavigable())
+    fireEvent.blur(window)
+    assert.ok(!isNavigable())
+    view.unmount()
+  })
+
   it('does not apply a pending response after highlighting is disabled', async () => {
     let complete: (value: ICSharpHighlightResult) => void = () => {}
     const pending = new Promise<ICSharpHighlightResult>(resolve => {

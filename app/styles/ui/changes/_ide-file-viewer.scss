@@ -82,6 +82,19 @@
     }
   }
 
+  // While Ctrl is held, the words that Ctrl+click goes to the definition of
+  .ide-csharp-navigable {
+    .ide-csharp-type,
+    .ide-csharp-method,
+    .ide-csharp-variable,
+    .ide-csharp-constant {
+      &:hover {
+        cursor: pointer;
+        text-decoration: underline;
+      }
+    }
+  }
+
   .header .ide-file-viewer-path {
     flex: 1 1 auto;
     min-width: 0;

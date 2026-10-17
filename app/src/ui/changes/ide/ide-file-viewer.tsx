@@ -50,6 +50,9 @@ import {
 /** How long to wait after the changes updated before reading the file again */
 const ReloadDelay = 200
 
+/** How long after a mouse button the app command for it is taken as the same click. */
+const NativeNavigationEchoMs = 500
+
 const HighlightChangesKey = 'ide-highlight-changes'
 const UnchangedTextOpacityKey = 'ide-unchanged-text-opacity'
 
@@ -163,6 +166,7 @@ export class IdeFileViewer extends React.Component<
   IIdeFileViewerState
 > {
   private unmounted = false
+  private lastMouseUpNavigation = 0
   private loadRequestId = 0
   private reloadTimeoutId: number | null = null
   private editorRef = React.createRef<IdeCodeEditor>()
@@ -229,6 +233,7 @@ export class IdeFileViewer extends React.Component<
     document.addEventListener('keyup', this.onKeyUp)
     window.addEventListener('blur', this.onWindowBlur)
     ipcRenderer.on('navigate-source', this.onNativeNavigation)
+    document.addEventListener('mouseup', this.onMouseUp)
 
     // The Find menu item, see app.tsx
     document.addEventListener('find-text', this.showSearch)
@@ -303,6 +308,7 @@ export class IdeFileViewer extends React.Component<
     document.removeEventListener('keyup', this.onKeyUp)
     window.removeEventListener('blur', this.onWindowBlur)
     ipcRenderer.removeListener('navigate-source', this.onNativeNavigation)
+    document.removeEventListener('mouseup', this.onMouseUp)
     document.removeEventListener('find-text', this.showSearch)
     this.unmounted = true
     this.keepUnsavedEdits(this.props.repository, this.props.path)
@@ -749,16 +755,43 @@ export class IdeFileViewer extends React.Component<
 
   private onNavigationForward = () => this.navigateHistory('forward')
 
+  private canNavigateWithMouse() {
+    return (
+      this.props.onSelectedPathChanged !== undefined &&
+      this.props.commit === undefined
+    )
+  }
+
   private onNativeNavigation = (
     _: Electron.IpcRendererEvent,
     direction: 'back' | 'forward'
   ) => {
-    if (
-      this.props.onSelectedPathChanged !== undefined &&
-      this.props.commit === undefined
-    ) {
+    // The same click can arrive here as well as through onMouseUp.
+    if (Date.now() - this.lastMouseUpNavigation < NativeNavigationEchoMs) {
+      return
+    }
+
+    if (this.canNavigateWithMouse()) {
       this.navigateHistory(direction)
     }
+  }
+
+  /**
+   * The side buttons of a mouse go back and forward. Windows turns them into
+   * an app command, which doesn't always reach the window, so they are also
+   * handled here.
+   */
+  private onMouseUp = (event: MouseEvent) => {
+    if (
+      (event.button !== 3 && event.button !== 4) ||
+      !this.canNavigateWithMouse()
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    this.lastMouseUpNavigation = Date.now()
+    this.navigateHistory(event.button === 3 ? 'back' : 'forward')
   }
 
   private navigateHistory(direction: 'back' | 'forward') {
