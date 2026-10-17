@@ -69,6 +69,7 @@
   }
 
   .side-by-side-diff {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex-grow: 1;
@@ -77,6 +78,40 @@
     font-size: var(--font-size-sm);
     color: var(--diff-text-color);
     background: var(--background-color);
+  }
+
+  // Where the changes are, over the scroll bar, like in the Gitybara view (see
+  // diff-change-ruler.tsx)
+  .diff-change-ruler {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    pointer-events: none;
+    z-index: 1;
+
+    .diff-change-mark {
+      position: absolute;
+      right: 3px;
+      width: 6px;
+      min-height: 3px;
+      border-radius: 1px;
+      opacity: 0.85;
+
+      &.added {
+        background: var(--color-new);
+      }
+
+      &.deleted {
+        background: var(--color-deleted);
+      }
+
+      // The old and the new line side by side
+      &.modified {
+        background: linear-gradient(to right, var(--color-deleted) 50%, var(--color-new) 50%);
+      }
+    }
   }
 
   .ReactVirtualized__Grid:focus {

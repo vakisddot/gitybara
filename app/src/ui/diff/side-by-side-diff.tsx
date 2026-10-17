@@ -82,6 +82,7 @@ import {
 } from '../lib/diff-mode'
 import { clamp } from '../../lib/clamp'
 import findLastIndex from 'lodash/findLastIndex'
+import { DiffChangeRuler, getChangeRulerMarks } from './diff-change-ruler'
 import {
   DiffViewController,
   IDiffView,
@@ -799,6 +800,11 @@ export class SideBySideDiff
               />
             )}
           </AutoSizer>
+          <DiffChangeRuler
+            marks={getChangeRulerMarks(rows, index =>
+              this.getRowHeight({ index })
+            )}
+          />
         </div>
       </div>
     )
