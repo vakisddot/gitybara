@@ -128,6 +128,10 @@ export async function generateReleaseSummary(
   version?: string
 ): Promise<ReadonlyArray<ReleaseSummary>> {
   const lastTenReleases = await getChangeLog()
+  if (lastTenReleases.length === 0) {
+    return []
+  }
+
   const currentVersion = new semver.SemVer(version ?? getVersion())
   const recentReleases = lastTenReleases.filter(
     r =>
@@ -141,6 +145,23 @@ export async function generateReleaseSummary(
   return recentReleases.length > 0
     ? recentReleases.map(getReleaseSummary)
     : [getReleaseSummary(lastTenReleases[0])]
+}
+
+/**
+ * The release notes of the versions that are new, or null if there are none to
+ * show.
+ *
+ * This is for the update banner. Not having release notes, or failing to get
+ * them, must never keep the update from being offered.
+ */
+export async function tryGenerateReleaseSummary(): Promise<ReadonlyArray<ReleaseSummary> | null> {
+  try {
+    const releases = await generateReleaseSummary()
+    return releases.length > 0 ? releases : null
+  } catch (e) {
+    log.error('Could not get the release notes of the update', e)
+    return null
+  }
 }
 
 /**

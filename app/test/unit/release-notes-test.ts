@@ -3,6 +3,8 @@ import assert from 'node:assert'
 import {
   parseReleaseEntries,
   getReleaseSummary,
+  generateReleaseSummary,
+  tryGenerateReleaseSummary,
 } from '../../src/lib/release-notes'
 
 describe('release-notes', () => {
@@ -137,6 +139,18 @@ describe('release-notes', () => {
       assert(result.datePublished.includes('2017'))
       assert.equal(result.bugfixes.length, 4)
       assert.equal(result.enhancements.length, 4)
+    })
+  })
+
+  // Gitybara has no changelog to read, so there are no release notes. The
+  // update prompt used to depend on them and never showed because of it.
+  describe('without a changelog', () => {
+    it('has no release summary', async () => {
+      assert.deepEqual(await generateReleaseSummary(), [])
+    })
+
+    it('has no release notes to show with an update', async () => {
+      assert.equal(await tryGenerateReleaseSummary(), null)
     })
   })
 })
