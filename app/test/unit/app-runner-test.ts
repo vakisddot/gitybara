@@ -1,8 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
 import * as Path from 'path'
 import {
+  getWindowsStartCommand,
   parseRunConfig,
+  programExists,
   resolveProgram,
   resolveWorkingDirectory,
   summarizeBuildFailure,
@@ -144,5 +148,61 @@ describe('summarizeBuildFailure', () => {
     const output = ['one', 'two', 'three'].join('\r\n')
 
     assert.equal(summarizeBuildFailure(output, 2), 'two\nthree')
+  })
+})
+
+describe('getWindowsStartCommand', () => {
+  it('starts the program in a window of its own and waits for it', () => {
+    assert.equal(
+      getWindowsStartCommand(
+        'C:AppsMy Appapp.exe',
+        ['--one', 'two words'],
+        'C:AppsMy App'
+      ),
+      'start "" /wait /d "C:AppsMy App" "C:AppsMy Appapp.exe" "--one" "two words"'
+    )
+  })
+
+  it('works without arguments', () => {
+    assert.equal(
+      getWindowsStartCommand('dotnet', [], 'C:code'),
+      'start "" /wait /d "C:code" "dotnet"'
+    )
+  })
+
+  it('refuses values with a double quote', () => {
+    assert.equal(
+      getWindowsStartCommand('app.exe', ['say "hi"'], 'C:code'),
+      null
+    )
+    assert.equal(getWindowsStartCommand('a"b.exe', [], 'C:code'), null)
+    assert.equal(getWindowsStartCommand('app.exe', [], 'C:co"de'), null)
+  })
+})
+
+describe('programExists', () => {
+  const folder = mkdtempSync(Path.join(tmpdir(), 'app-runner-'))
+  writeFileSync(Path.join(folder, 'tool.exe'), '')
+  mkdirSync(Path.join(folder, 'dir.exe'))
+  const env = { PATH: folder, PATHEXT: '.COM;.EXE' }
+
+  it('finds a program with a path, with or without its extension', async () => {
+    assert.equal(await programExists(Path.join(folder, 'tool.exe'), env), true)
+    assert.equal(await programExists(Path.join(folder, 'tool'), env), true)
+  })
+
+  it('finds a program by name in PATH', async () => {
+    assert.equal(await programExists('tool', env), true)
+    assert.equal(await programExists('tool.exe', env), true)
+  })
+
+  it('does not find a missing program', async () => {
+    assert.equal(await programExists(Path.join(folder, 'nope.exe'), env), false)
+    assert.equal(await programExists('nope', env), false)
+    assert.equal(await programExists('tool', { PATH: '' }), false)
+  })
+
+  it('does not count a folder as a program', async () => {
+    assert.equal(await programExists('dir', env), false)
   })
 })

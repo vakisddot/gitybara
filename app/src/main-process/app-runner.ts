@@ -6,8 +6,10 @@ import {
   IAppRunnerStatus,
   IRunProfile,
   RunConfigResult,
+  getWindowsStartCommand,
   idleStatus,
   parseRunConfig,
+  programExists,
   resolveProgram,
   resolveWorkingDirectory,
   runConfigPath,
@@ -159,12 +161,48 @@ export function installAppRunnerHandlers() {
     }
 
     const [program, ...args] = profile.run
-    const child = spawn(resolveProgram(repositoryPath, program), args, {
-      cwd: resolveWorkingDirectory(repositoryPath, profile),
-      stdio: 'ignore',
-      // The app's own window is the point, and a console app gets one too.
-      windowsHide: false,
-    })
+    const programPath = resolveProgram(repositoryPath, program)
+    const workingDirectory = resolveWorkingDirectory(repositoryPath, profile)
+
+    // On Windows `start` gives a console program a console of its own, so its
+    // logs can be seen. The process followed is cmd, which waits for the app,
+    // and stopping it ends the app too.
+    const startCommand = __WIN32__
+      ? getWindowsStartCommand(programPath, args, workingDirectory)
+      : null
+    if (__WIN32__ && startCommand === null) {
+      finish(
+        repositoryPath,
+        run,
+        profile,
+        'The run command can not have double quotes in it.'
+      )
+      return
+    }
+
+    if (__WIN32__ && !(await programExists(programPath))) {
+      finish(
+        repositoryPath,
+        run,
+        profile,
+        `Could not run ${program}: it was not found.`
+      )
+      return
+    }
+
+    const child =
+      startCommand !== null
+        ? spawn(
+            process.env.ComSpec ?? 'cmd.exe',
+            ['/d', '/s', '/c', `"${startCommand}"`],
+            {
+              cwd: repositoryPath,
+              stdio: 'ignore',
+              windowsVerbatimArguments: true,
+              windowsHide: true,
+            }
+          )
+        : spawn(programPath, args, { cwd: workingDirectory, stdio: 'ignore' })
     run.child = child
 
     let hasStarted = false

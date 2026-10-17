@@ -1,3 +1,4 @@
+import { stat } from 'fs/promises'
 import * as Path from 'path'
 
 /** Where a repository describes how to build and run itself. */
@@ -134,6 +135,76 @@ export function resolveWorkingDirectory(
   profile: IRunProfile
 ) {
   return Path.resolve(repositoryPath, profile.cwd ?? '.')
+}
+
+/**
+ * The command for `cmd /d /s /c "..."` that starts a program in a window of its
+ * own and waits for it to end.
+ *
+ * `start` gives a console program a console of its own, so what it prints can
+ * be seen, as when it is started from an IDE. Starting it directly would give
+ * it no console, or one with nothing in it.
+ *
+ * Returns null if a value has a double quote, which can't be passed safely.
+ */
+export function getWindowsStartCommand(
+  program: string,
+  args: ReadonlyArray<string>,
+  workingDirectory: string
+) {
+  if ([program, workingDirectory, ...args].some(value => value.includes('"'))) {
+    return null
+  }
+
+  const quote = (value: string) => `"${value}"`
+  const parts = [
+    'start',
+    '""',
+    '/wait',
+    '/d',
+    quote(workingDirectory),
+    quote(program),
+    ...args.map(quote),
+  ]
+  return parts.join(' ')
+}
+
+async function isFile(path: string) {
+  try {
+    return (await stat(path)).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether a program can be found, in the way Windows looks for one: as written
+ * if it has a path, or in the folders of PATH, with or without an extension
+ * like .exe.
+ *
+ * Starting one that doesn't exist with `start` shows an error dialog and waits
+ * for it to be dismissed, so this is checked first.
+ */
+export async function programExists(
+  program: string,
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const extensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .filter(extension => extension !== '')
+  const folders = /[\\/]/.test(program)
+    ? ['']
+    : (env.PATH ?? '').split(Path.delimiter).filter(folder => folder !== '')
+
+  for (const folder of folders) {
+    const base = Path.join(folder, program)
+    for (const extension of ['', ...extensions]) {
+      if (await isFile(base + extension)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /** The lines of build output worth showing when a build fails. */
