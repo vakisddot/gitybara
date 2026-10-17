@@ -20,6 +20,7 @@ describe('IPC channel contract', () => {
     : never
 
   const expectedRequestChannels = [
+    'app-runner-status',
     'csharp-close',
     'csharp-update',
     'csharp-refresh',
@@ -78,6 +79,10 @@ describe('IPC channel contract', () => {
   ] as const
 
   const expectedResponseChannels = [
+    'app-runner-get-config',
+    'app-runner-get-status',
+    'app-runner-start',
+    'app-runner-stop',
     'read-github-desktop-repositories',
     'csharp-highlight',
     'csharp-navigate',
