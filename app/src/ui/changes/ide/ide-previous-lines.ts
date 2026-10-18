@@ -2,6 +2,7 @@ import CodeMirror from 'codemirror'
 import 'codemirror/addon/runmode/runmode'
 
 import { IPreviousLineBlock } from './ide-line-changes'
+import { IdeDiffSelection } from './ide-diff-selection'
 
 const PreviousLinesGutter = 'ide-previous-lines-gutter'
 
@@ -58,8 +59,10 @@ export class IdePreviousLines {
   /** The widths the old lines were last lined up with, in pixels */
   private gutterWidth = -1
   private lineNumberWidth = -1
+  private readonly selection: IdeDiffSelection
 
   public constructor(private readonly editor: CodeMirror.Editor) {
+    this.selection = new IdeDiffSelection(editor, () => this.previews)
     editor.on('update', this.lineUpWithGutter)
   }
 
@@ -134,6 +137,7 @@ export class IdePreviousLines {
   /** Also called when the syntax mode or tab width changes. */
   public refresh() {
     this.stopExpansion()
+    this.selection.setEnabled(this.shown && this.previews.length > 0)
     this.editor.operation(() => {
       this.clearPresentation()
 
@@ -177,10 +181,26 @@ export class IdePreviousLines {
   }
 
   public clear() {
+    this.selection.setEnabled(false)
     this.stopExpansion()
     this.editor.operation(() => this.clearPresentation())
     this.blocks = null
     this.previews = []
+  }
+
+  public dispose() {
+    this.clear()
+    this.editor.off('update', this.lineUpWithGutter)
+  }
+
+  /** The display-only selection, if it contains previous code. */
+  public getSelectedText(): string | null {
+    return this.selection.getSelectedText()
+  }
+
+  /** Whether the expanded previous code handled selecting both versions. */
+  public selectAll(): boolean {
+    return this.selection.selectAll()
   }
 
   private clearPresentation() {

@@ -256,6 +256,34 @@
       border-left-color: var(--text-color);
     }
 
+    // CodeMirror's native selection defaults to pale lavender. Use the same
+    // system colors for current and previous code as the other diff views.
+    .CodeMirror-line,
+    .ide-previous-line code {
+      &::selection,
+      *::selection {
+        background: Highlight;
+        color: HighlightText;
+      }
+    }
+
+    // Old widgets and document lines share native selection while expanded.
+    .ide-diff-selection-enabled pre.CodeMirror-line,
+    .ide-diff-selection-enabled pre.CodeMirror-line * {
+      user-select: text;
+      cursor: text;
+    }
+
+    .ide-selecting-diff {
+      .CodeMirror-selected {
+        background: transparent;
+      }
+
+      .CodeMirror-cursors {
+        visibility: hidden;
+      }
+    }
+
     // CodeMirror's stylesheet colors the active line a fixed light blue, which
     // is glaring in the dark themes and hides the text that is dimmed. A tint
     // of the text color suits every theme, and being see-through it leaves the
@@ -511,9 +539,7 @@
       cursor: text;
     }
 
-    // CodeMirror leaves the mouse in widgets to the browser, so the old text
-    // is selected and copied like any page text. Each token is opted in, as
-    // every element is unselectable by default.
+    // Each token is opted in, as every element is unselectable by default.
     code,
     code * {
       user-select: text;

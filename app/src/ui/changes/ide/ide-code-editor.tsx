@@ -5,6 +5,7 @@ import 'codemirror/addon/fold/foldcode'
 import 'codemirror/addon/fold/foldgutter'
 import 'codemirror/addon/search/searchcursor'
 import 'codemirror/addon/selection/active-line'
+import 'codemirror/addon/selection/mark-selection'
 import 'codemirror/mode/meta'
 
 import {
@@ -20,6 +21,7 @@ import {
 } from './ide-indentation'
 import { IInlineChange, ILineChanges, ILineRange } from './ide-line-changes'
 import { IdePreviousLines } from './ide-previous-lines'
+import { IMenuItem, showContextualMenu } from '../../../lib/menu-item'
 import * as ipcRenderer from '../../../lib/ipc-renderer'
 import { getCSharpTokenClass } from '../../../lib/csharp/semantic-tokens'
 import {
@@ -112,6 +114,9 @@ interface IIdeCodeEditorProps {
 
   /** Called when the user asks to save the file. */
   readonly onSave: () => void
+
+  /** Viewer actions appended after the standard text-selection actions. */
+  readonly additionalContextMenuItems?: ReadonlyArray<IMenuItem>
 
   /** Present only for C# source in the working repository. */
   readonly repositoryPath?: string
@@ -234,6 +239,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       indentWithTabs: false,
       readOnly,
       styleActiveLine: !readOnly,
+      styleSelectedText: true,
       lineWrapping: false,
       viewportMargin: 20,
       gutters: ['CodeMirror-linenumbers', FoldGutter],
@@ -261,6 +267,11 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.editor = editor
     this.previousLines = new IdePreviousLines(editor)
     this.previousLines.setShown(this.props.showPreviousLines)
+    const wrapper = editor.getWrapperElement()
+    wrapper.addEventListener('mousedown', this.onContextMouseDown, true)
+    wrapper.addEventListener('contextmenu', this.onContextMenu, true)
+    wrapper.addEventListener('select-all', this.onSelectAll)
+    wrapper.addEventListener('keydown', this.onSelectAllKeyDown, true)
     editor.on('renderLine', this.onRenderLine)
     editor.on('changes', this.onChanges)
     editor.on('update', this.onUpdate)
@@ -329,6 +340,11 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   public componentWillUnmount() {
+    const wrapper = this.editor?.getWrapperElement()
+    wrapper?.removeEventListener('mousedown', this.onContextMouseDown, true)
+    wrapper?.removeEventListener('contextmenu', this.onContextMenu, true)
+    wrapper?.removeEventListener('select-all', this.onSelectAll)
+    wrapper?.removeEventListener('keydown', this.onSelectAllKeyDown, true)
     // Keep a just-edited file in Roslyn when switching to another source file.
     const document = this.getCSharpDocument()
     if (document !== null) {
@@ -355,7 +371,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
     this.modeRequestId++
     this.clearInlineChanges()
-    this.previousLines?.clear()
+    this.previousLines?.dispose()
     this.previousLines = null
     this.editor = null
     this.containerRef.current?.replaceChildren()
@@ -364,6 +380,57 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   /** The lines of the text in the editor. */
   public getLines(): ReadonlyArray<string> {
     return this.editor?.getDoc().getValue('\n').split('\n') ?? []
+  }
+
+  private onContextMouseDown = (event: MouseEvent) => {
+    // CodeMirror otherwise focuses its hidden input on right-click, replacing
+    // a native selection that includes previous code before the menu opens.
+    if (event.button === 2) {
+      event.stopPropagation()
+    }
+  }
+
+  private onContextMenu = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const displayedSelection = this.previousLines?.getSelectedText() ?? null
+    if (displayedSelection === null) {
+      // The native Copy role reads a current-only selection from this input.
+      this.editor?.focus()
+    }
+    const text = displayedSelection ?? this.editor?.getSelection() ?? ''
+    showContextualMenu([
+      {
+        label: 'Copy',
+        role: text.length > 0 ? 'copy' : undefined,
+        enabled: text.length > 0,
+      },
+      {
+        label: __DARWIN__ ? 'Select All' : 'Select all',
+        action: () => this.onSelectAll(),
+      },
+      ...(this.props.additionalContextMenuItems ?? []),
+    ])
+  }
+
+  private onSelectAll = (event?: Event) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+    if (!this.previousLines?.selectAll()) {
+      this.editor?.execCommand('selectAll')
+      this.editor?.focus()
+    }
+  }
+
+  private onSelectAllKeyDown = (event: KeyboardEvent) => {
+    if (
+      event.key.toLowerCase() === 'a' &&
+      (__DARWIN__ ? event.metaKey : event.ctrlKey) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      this.onSelectAll(event)
+    }
   }
 
   /**

@@ -1204,6 +1204,19 @@ export class IdeFileViewer extends React.Component<
             lineChanges={lineChanges}
             onDirtyChange={this.onDirtyChange}
             onSave={this.onSave}
+            additionalContextMenuItems={
+              this.canToggleWholeFile()
+                ? [
+                    { type: 'separator' },
+                    {
+                      label: this.state.isWholeFileExpanded
+                        ? 'Collapse unchanged lines'
+                        : 'Expand whole file',
+                      action: this.onToggleWholeFile,
+                    },
+                  ]
+                : []
+            }
             repositoryPath={
               !isDeleted && this.hasCSharpSupport(path)
                 ? this.props.repository.path
