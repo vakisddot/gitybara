@@ -118,6 +118,16 @@ describe('ide-file-tree-state', () => {
       )
     })
 
+    it('matches backslashes with forward slashes', () => {
+      assert.deepStrictEqual(
+        filterIdePaths(paths, changed, {
+          text: 'src\\ui\\App.tsx',
+          changedOnly: false,
+        }),
+        ['src/ui/App.tsx']
+      )
+    })
+
     it('only keeps changed paths when asked to', () => {
       assert.deepStrictEqual(
         filterIdePaths(paths, changed, { text: '', changedOnly: true }),

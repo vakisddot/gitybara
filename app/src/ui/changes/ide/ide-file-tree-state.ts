@@ -119,7 +119,8 @@ export function isIdeFileFilterActive(filter: IIdeFileFilter): boolean {
 
 /**
  * The paths that pass the filter. Every word that was typed has to be somewhere
- * in the path, ignoring case, so "src ts" finds "src/index.ts".
+ * in the path, ignoring case, so "src ts" finds "src/index.ts". Backslashes
+ * match forward slashes, so a path copied on Windows finds its file.
  */
 export function filterIdePaths(
   paths: ReadonlyArray<string>,
@@ -130,7 +131,11 @@ export function filterIdePaths(
     return paths
   }
 
-  const words = filter.text.toLowerCase().split(/\s+/).filter(Boolean)
+  const words = filter.text
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .split(/\s+/)
+    .filter(Boolean)
   const changed = new Set(changedPaths)
 
   return paths.filter(path => {
