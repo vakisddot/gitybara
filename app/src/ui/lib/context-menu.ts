@@ -33,6 +33,8 @@ export const RevealInFileManagerLabel = __DARWIN__
   ? 'Show in Explorer'
   : 'Show in your File Manager'
 
+export const ShowInFilesLabel = 'Show in Files'
+
 export const TrashNameLabel = __WIN32__ ? 'Recycle Bin' : 'Trash'
 
 export const OpenWithDefaultProgramLabel = __DARWIN__

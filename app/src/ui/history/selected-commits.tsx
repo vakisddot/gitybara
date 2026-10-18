@@ -18,6 +18,7 @@ import {
   RevealInFileManagerLabel,
   OpenWithDefaultProgramLabel,
   CopyRelativeFilePathLabel,
+  ShowInFilesLabel,
 } from '../lib/context-menu'
 import { ThrottledScheduler } from '../lib/throttled-scheduler'
 
@@ -565,6 +566,11 @@ export class SelectedCommits extends React.Component<
       : DefaultEditorLabel
 
     const items: IMenuItem[] = [
+      {
+        label: ShowInFilesLabel,
+        action: () =>
+          this.props.dispatcher.showFileInFiles(repository, file.path),
+      },
       {
         label: RevealInFileManagerLabel,
         action: () => revealInFileManager(repository, file.path),

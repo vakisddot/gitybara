@@ -34,6 +34,7 @@ import {
   CopyRelativeFilePathLabel,
   CopySelectedPathsLabel,
   CopySelectedRelativePathsLabel,
+  ShowInFilesLabel,
 } from '../lib/context-menu'
 import { CommitMessage } from './commit-message'
 import { ChangedFile } from './changed-file'
@@ -673,6 +674,16 @@ export class FilterChangesList extends React.Component<
     }
   }
 
+  private getShowInFilesMenuItem = (
+    file: WorkingDirectoryFileChange
+  ): IMenuItem => {
+    return {
+      label: ShowInFilesLabel,
+      action: () =>
+        this.props.dispatcher.showFileInFiles(this.props.repository, file.path),
+    }
+  }
+
   private getRevealInFileManagerMenuItem = (
     file: WorkingDirectoryFileChange
   ): IMenuItem => {
@@ -838,6 +849,7 @@ export class FilterChangesList extends React.Component<
     const enabled = status.kind !== AppFileStatusKind.Deleted
     items.push(
       { type: 'separator' },
+      this.getShowInFilesMenuItem(file),
       this.getRevealInFileManagerMenuItem(file),
       this.getOpenInExternalEditorMenuItem(file, enabled),
       {
@@ -872,6 +884,7 @@ export class FilterChangesList extends React.Component<
       this.getCopyPathMenuItem(file),
       this.getCopyRelativePathMenuItem(file),
       { type: 'separator' },
+      this.getShowInFilesMenuItem(file),
       this.getRevealInFileManagerMenuItem(file),
       this.getOpenInExternalEditorMenuItem(file, enabled),
       {

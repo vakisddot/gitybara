@@ -4323,6 +4323,15 @@ export class Dispatcher {
     this.appStore._setIdeSelectedFilePath(repository, path)
   }
 
+  /** Switch to the Files tab with the given file selected. */
+  public showFileInFiles(repository: Repository, path: string) {
+    this.appStore._setIdeSelectedFilePath(repository, path)
+    return this.appStore._changeRepositorySection(
+      repository,
+      RepositorySectionTab.Files
+    )
+  }
+
   /** Set the selected Copilot model for a specific feature. */
   public setSelectedCopilotModel(
     account: Account,

@@ -243,10 +243,16 @@ export class IdeFileTree extends React.Component<
         }
 
         // The first time, open the directories that have changes so the
-        // changed files are visible without having to look for them.
+        // changed files are visible without having to look for them, and the
+        // ones of the selected file, which the list then scrolls to.
+        const { selectedPath } = this.props
         const expandedDirectoryIds =
           previousPaths === null
-            ? getDirectoriesContainingPaths(this.changedPaths)
+            ? getDirectoriesContainingPaths(
+                selectedPath === null
+                  ? this.changedPaths
+                  : [...this.changedPaths, selectedPath]
+              )
             : prevState.expandedDirectoryIds
 
         return { repositoryPaths, loadFailed: false, expandedDirectoryIds }
