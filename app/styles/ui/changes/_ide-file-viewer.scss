@@ -505,6 +505,15 @@
       padding: 0 12px;
       font: inherit;
       white-space: pre;
+      cursor: text;
+    }
+
+    // CodeMirror leaves the mouse in widgets to the browser, so the old text
+    // is selected and copied like any page text. Each token is opted in, as
+    // every element is unselectable by default.
+    code,
+    code * {
+      user-select: text;
     }
   }
 
