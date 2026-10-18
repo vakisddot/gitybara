@@ -96,7 +96,9 @@ export class DiffViewControls extends React.Component<
             ariaLabel={wholeFileLabel}
           >
             <Octicon
-              symbol={isWholeFileExpanded ? octicons.fold : octicons.unfold}
+              symbol={
+                isWholeFileExpanded ? octicons.fileDiff : octicons.fileCode
+              }
             />
           </Button>
         </div>

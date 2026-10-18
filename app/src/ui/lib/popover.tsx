@@ -16,7 +16,7 @@ import {
   Side,
   size,
 } from '@floating-ui/core'
-import { assertNever } from '../../lib/fatal-error'
+import { assertNever, forceUnwrap } from '../../lib/fatal-error'
 import { isMacOSSequoia, isMacOSSonoma, isMacOSVentura } from '../../lib/get-os'
 
 /**
@@ -114,6 +114,12 @@ export class Popover extends React.Component<IPopoverProps, IPopoverState> {
     this.focusTrapOptions = {
       allowOutsideClick: true,
       escapeDeactivates: true,
+      // Text-only popovers still need somewhere to receive keyboard focus.
+      fallbackFocus: () =>
+        forceUnwrap(
+          'The popover is mounted before its focus trap activates',
+          this.containerDivRef.current
+        ),
       onDeactivate: this.props.onMousedownOutside ?? this.props.onClickOutside,
     }
 
@@ -369,6 +375,7 @@ export class Popover extends React.Component<IPopoverProps, IPopoverState> {
         ref={this.containerDivRef}
         {...this.getAriaAttributes()}
         role={isDialog === false ? undefined : 'dialog'}
+        tabIndex={-1}
       >
         <div
           className="popover-content"

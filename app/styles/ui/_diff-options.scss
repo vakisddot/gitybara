@@ -7,8 +7,9 @@
     font-family: inherit;
     background: transparent;
     border: none;
-    padding: 0;
+    padding: 0 var(--spacing-half);
     margin: 0;
+    height: 22px;
 
     display: flex;
     align-items: center;
@@ -25,6 +26,7 @@
     }
 
     .octicon {
+      display: block;
       margin-right: 0;
     }
   }

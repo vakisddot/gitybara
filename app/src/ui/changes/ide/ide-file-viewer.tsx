@@ -993,7 +993,7 @@ export class IdeFileViewer extends React.Component<
           ariaLabel={label}
         >
           <Octicon
-            symbol={isWholeFileExpanded ? octicons.fold : octicons.unfold}
+            symbol={isWholeFileExpanded ? octicons.fileDiff : octicons.fileCode}
           />
         </Button>
       </div>
@@ -1018,7 +1018,7 @@ export class IdeFileViewer extends React.Component<
           tooltip="Fold all blocks"
           ariaLabel="Fold all blocks"
         >
-          <Octicon symbol={octicons.fold} />
+          <Octicon symbol={octicons.chevronRight} />
         </Button>
         <Button
           className="ide-file-viewer-header-button"
@@ -1026,7 +1026,7 @@ export class IdeFileViewer extends React.Component<
           tooltip="Unfold all blocks"
           ariaLabel="Unfold all blocks"
         >
-          <Octicon symbol={octicons.unfold} />
+          <Octicon symbol={octicons.chevronDown} />
         </Button>
       </div>
     )
