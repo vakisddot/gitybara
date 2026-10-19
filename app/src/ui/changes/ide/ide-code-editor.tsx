@@ -68,6 +68,9 @@ interface IAnalysis {
 }
 
 interface IIdeCodeEditorProps {
+  /** File content magnification; does not change the text or undo history. */
+  readonly zoomFactor?: number
+
   /** The file that is edited, to pick the language from. */
   readonly path: string
 
@@ -308,6 +311,10 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     const { path, revision, tabSize, readOnly, highlight, lineChanges } =
       this.props
 
+    if (prevProps.zoomFactor !== this.props.zoomFactor) {
+      this.refresh()
+    }
+
     if (prevProps.tabSize !== tabSize) {
       editor.setOption('tabSize', tabSize)
       editor.setOption('indentUnit', tabSize)
@@ -459,6 +466,12 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
 
   public focus() {
     this.editor?.focus()
+  }
+
+  /** Measure the editor again after it has been hidden by a file preview. */
+  public refresh() {
+    this.editor?.refresh()
+    this.previousLines?.refresh()
   }
 
   /** The current caret position, for returning after source navigation. */

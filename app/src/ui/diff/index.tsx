@@ -25,6 +25,8 @@ import {
   ISubmoduleDiff,
 } from '../../models/diff'
 import { Button } from '../lib/button'
+import { FileContentZoom } from '../lib/file-content-zoom'
+import { ZoomableImageDiff } from './image-diffs/zoomable-image-diff'
 import { TabBar, TabBarType } from '../tab-bar'
 import {
   NewImageDiff,
@@ -38,17 +40,15 @@ import { SubmoduleDiff } from './submodule-diff'
 import { DiffViewController } from './diff-view-controller'
 import { Octicon } from '../octicons'
 import * as OcticonSymbol from '../octicons/octicons.generated'
+import {
+  isMarkdownFile,
+  MarkdownFilePreview,
+} from '../lib/markdown-file-preview'
 
 // image used when no diff is displayed
 const NoDiffImage = encodePathAsUrl(__dirname, 'static/ufo-alert.svg')
 
 type ChangedFile = WorkingDirectoryFileChange | CommittedFileChange
-
-/** Whether an SVG is shown as its code or as the image it draws. */
-enum SvgDiffMode {
-  Code,
-  Preview,
-}
 
 /**
  * Turn the lines of one version of an SVG into an image, or undefined when
@@ -141,7 +141,7 @@ interface IDiffProps {
 
 interface IDiffState {
   readonly forceShowLargeDiff: boolean
-  readonly svgDiffMode: SvgDiffMode
+  readonly showPreview: boolean
 }
 
 /** A component which renders a diff for a file. */
@@ -163,38 +163,52 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
 
     this.state = {
       forceShowLargeDiff: false,
-      svgDiffMode: SvgDiffMode.Code,
+      showPreview: false,
     }
   }
 
   public render() {
+    const { kind } = this.props.diff
+    return kind === DiffType.Text ||
+      kind === DiffType.LargeText ||
+      kind === DiffType.Image ? (
+      <FileContentZoom>{this.renderContents}</FileContentZoom>
+    ) : (
+      this.renderDiff(1)
+    )
+  }
+
+  private renderContents = (zoomFactor: number) => {
     const { diff, file } = this.props
-    const isSvgText =
-      Path.extname(file.path).toLowerCase() === '.svg' &&
+    const isMarkdown = isMarkdownFile(file.path)
+    const canPreview =
+      (Path.extname(file.path).toLowerCase() === '.svg' || isMarkdown) &&
       (diff.kind === DiffType.Text || diff.kind === DiffType.LargeText)
 
-    if (!isSvgText) {
-      return this.renderDiff()
+    if (!canPreview) {
+      return this.renderDiff(zoomFactor)
     }
 
     return (
-      <div className="svg-diff">
+      <div className="file-preview-diff">
         <TabBar
-          selectedIndex={this.state.svgDiffMode}
-          onTabClicked={this.onSvgDiffModeChanged}
+          selectedIndex={this.state.showPreview ? 1 : 0}
+          onTabClicked={this.onPreviewModeChanged}
           type={TabBarType.Switch}
         >
           <span>Code</span>
           <span>Preview</span>
         </TabBar>
-        {this.state.svgDiffMode === SvgDiffMode.Preview
-          ? this.renderSvgPreview()
-          : this.renderDiff()}
+        {this.state.showPreview
+          ? isMarkdown
+            ? this.renderMarkdownPreview(zoomFactor)
+            : this.renderSvgPreview(zoomFactor)
+          : this.renderDiff(zoomFactor)}
       </div>
     )
   }
 
-  private renderSvgPreview() {
+  private renderSvgPreview(zoomFactor: number) {
     const { fileContents } = this.props
 
     // The contents of a newly selected file are still loading
@@ -209,31 +223,59 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
     }
 
     return (
-      this.renderImage(this.getSvgImageDiff(fileContents)) ?? (
+      this.renderImage(this.getSvgImageDiff(fileContents), zoomFactor) ?? (
         <div className="panel empty">The SVG can’t be previewed.</div>
       )
     )
   }
 
-  private onSvgDiffModeChanged = (svgDiffMode: SvgDiffMode) => {
-    this.setState({ svgDiffMode })
+  private renderMarkdownPreview(zoomFactor: number) {
+    const { fileContents, file } = this.props
+
+    if (fileContents === null) {
+      return null
+    }
+
+    if (fileContents.isTruncated) {
+      return (
+        <div className="panel empty">
+          The Markdown file is too large to be previewed.
+        </div>
+      )
+    }
+
+    const lines =
+      file.status.kind === AppFileStatusKind.Deleted
+        ? fileContents.oldContents
+        : fileContents.newContents
+
+    return (
+      <MarkdownFilePreview
+        markdown={lines.join('\n')}
+        zoomFactor={zoomFactor}
+      />
+    )
   }
 
-  private renderDiff() {
+  private onPreviewModeChanged = (index: number) => {
+    this.setState({ showPreview: index === 1 })
+  }
+
+  private renderDiff(zoomFactor: number) {
     const diff = this.props.diff
 
     switch (diff.kind) {
       case DiffType.Text:
-        return this.renderText(diff)
+        return this.renderText(diff, zoomFactor)
       case DiffType.Binary:
         return this.renderBinaryFile()
       case DiffType.Submodule:
         return this.renderSubmoduleDiff(diff)
       case DiffType.Image:
-        return this.renderImage(diff)
+        return this.renderImage(diff, zoomFactor)
       case DiffType.LargeText: {
         return this.state.forceShowLargeDiff
-          ? this.renderLargeText(diff)
+          ? this.renderLargeText(diff, zoomFactor)
           : this.renderLargeTextDiff()
       }
       case DiffType.Unrenderable:
@@ -243,7 +285,14 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
     }
   }
 
-  private renderImage(imageDiff: IImageDiff) {
+  private renderImage(imageDiff: IImageDiff, zoomFactor: number) {
+    const image = this.renderImageDiff(imageDiff)
+    return image === null ? null : (
+      <ZoomableImageDiff zoomFactor={zoomFactor}>{image}</ZoomableImageDiff>
+    )
+  }
+
+  private renderImageDiff(imageDiff: IImageDiff) {
     if (imageDiff.current && imageDiff.previous) {
       return (
         <ModifiedImageDiff
@@ -300,7 +349,7 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
     )
   }
 
-  private renderLargeText(diff: ILargeTextDiff) {
+  private renderLargeText(diff: ILargeTextDiff, zoomFactor: number) {
     // guaranteed to be set since this function won't be called if text or hunks are null
     const textDiff: ITextDiff = {
       text: diff.text,
@@ -311,10 +360,10 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
       hasHiddenBidiChars: diff.hasHiddenBidiChars,
     }
 
-    return this.renderTextDiff(textDiff)
+    return this.renderTextDiff(textDiff, zoomFactor)
   }
 
-  private renderText(diff: ITextDiff) {
+  private renderText(diff: ITextDiff, zoomFactor: number) {
     if (diff.hunks.length === 0) {
       if (
         this.props.file.status.kind === AppFileStatusKind.New ||
@@ -358,7 +407,7 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
       return <div className="panel empty">No content changes found</div>
     }
 
-    return this.renderTextDiff(diff)
+    return this.renderTextDiff(diff, zoomFactor)
   }
 
   private renderSubmoduleDiff(diff: ISubmoduleDiff) {
@@ -381,10 +430,11 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
     )
   }
 
-  private renderTextDiff(diff: ITextDiff) {
+  private renderTextDiff(diff: ITextDiff, zoomFactor: number) {
     return (
       <SideBySideDiff
         file={this.props.file}
+        zoomFactor={zoomFactor}
         diff={diff}
         fileContents={this.props.fileContents}
         hideWhitespaceInDiff={this.props.hideWhitespaceInDiff}

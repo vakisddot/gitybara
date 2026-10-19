@@ -18,6 +18,15 @@ interface ISandboxedMarkdownProps {
   /** A string of unparsed markdown to display */
   readonly markdown: string
 
+  /** Treat single line breaks as hard breaks, as GitHub comments do by default. */
+  readonly breaks?: boolean
+
+  /** Magnification of file previews, without changing the surrounding UI. */
+  readonly zoomFactor?: number
+
+  /** Wheel events must be handled inside the iframe rather than its parent. */
+  readonly onWheel?: (event: WheelEvent) => void
+
   /** The baseHref of the markdown content for when the markdown has relative links */
   readonly baseHref?: string
 
@@ -141,7 +150,7 @@ export class SandboxedMarkdown extends React.PureComponent<
         // https://marked.js.org/using_advanced, If true, add <br> on a single
         // line break (copies GitHub behavior on comments, but not on rendered
         // markdown files). Requires gfm be true.
-        breaks: true,
+        breaks: this.props.breaks ?? true,
       })
     )
 
@@ -204,12 +213,17 @@ export class SandboxedMarkdown extends React.PureComponent<
   }
 
   public async componentDidUpdate(prevProps: ISandboxedMarkdownProps) {
+    if (prevProps.zoomFactor !== this.props.zoomFactor) {
+      this.applyZoom()
+    }
+
     // rerender iframe contents if provided markdown changes
     if (
       prevProps.markdown !== this.props.markdown ||
       this.props.emoji !== prevProps.emoji ||
       this.props.repository?.hash !== prevProps.repository?.hash ||
-      this.props.markdownContext !== prevProps.markdownContext
+      this.props.markdownContext !== prevProps.markdownContext ||
+      this.props.breaks !== prevProps.breaks
     ) {
       this.renderMarkdown()
     }
@@ -344,7 +358,8 @@ export class SandboxedMarkdown extends React.PureComponent<
       return
     }
 
-    this.refreshHeight()
+    this.applyZoom()
+    doc.addEventListener('wheel', this.onWheel, { passive: false })
 
     Array.from(doc.querySelectorAll('img')).forEach(img =>
       img.addEventListener('load', this.refreshHeight)
@@ -359,6 +374,15 @@ export class SandboxedMarkdown extends React.PureComponent<
     this.setupTooltips(doc)
 
     this.props.onMarkdownParsed?.()
+  }
+
+  private onWheel = (event: WheelEvent) => this.props.onWheel?.(event)
+
+  private applyZoom() {
+    if (this.currentDocument !== null) {
+      this.currentDocument.body.style.zoom = String(this.props.zoomFactor ?? 1)
+      this.refreshHeight()
+    }
   }
 
   private async applyFilters(doc: Document) {

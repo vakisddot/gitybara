@@ -10,6 +10,12 @@ import { getWorkingDirectoryDiff } from '../../../lib/git/diff'
 import { mapStatus } from '../../../lib/status'
 import { formatBytes } from '../../lib/bytes'
 import { Button } from '../../lib/button'
+import { FileContentZoom } from '../../lib/file-content-zoom'
+import { TabBar, TabBarType } from '../../tab-bar'
+import {
+  isMarkdownFile,
+  MarkdownFilePreview,
+} from '../../lib/markdown-file-preview'
 import { PathText } from '../../lib/path-text'
 import { AriaLiveContainer } from '../../accessibility/aria-live-container'
 import { DiffSearchInput } from '../../diff/diff-search-input'
@@ -133,6 +139,9 @@ interface IIdeFileViewerState {
   /** What was typed in the file and not saved, when the editor is opened */
   readonly draft: string | null
 
+  /** The text captured when opening the Markdown preview, null in code mode. */
+  readonly markdownPreview: string | null
+
   /** Whether the text in the editor differs from the saved text */
   readonly isDirty: boolean
 
@@ -213,6 +222,7 @@ export class IdeFileViewer extends React.Component<
       lineChanges: NoLineChanges,
       revision: 0,
       draft: null,
+      markdownPreview: null,
       isDirty: false,
       changedOnDisk: false,
       saveError: null,
@@ -274,6 +284,7 @@ export class IdeFileViewer extends React.Component<
         failed: false,
         lineChanges: NoLineChanges,
         draft: null,
+        markdownPreview: null,
         isDirty: false,
         changedOnDisk: false,
         saveError: null,
@@ -440,6 +451,10 @@ export class IdeFileViewer extends React.Component<
       failed: false,
       revision: contentsChanged ? prevState.revision + 1 : prevState.revision,
       draft: draft?.text ?? null,
+      markdownPreview:
+        prevState.markdownPreview !== null && contents.kind === 'text'
+          ? draft?.text ?? contents.lines.join('\n')
+          : null,
       // The edits of the draft were made to another version of the file
       changedOnDisk:
         draft !== undefined &&
@@ -612,6 +627,10 @@ export class IdeFileViewer extends React.Component<
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
+    if (this.state.markdownPreview !== null) {
+      return
+    }
+
     switch (getIdeShortcut(event, this.isEditorReadOnly())) {
       case 'find':
         if (this.showSearch()) {
@@ -701,7 +720,7 @@ export class IdeFileViewer extends React.Component<
 
   /** Show the box to search the file, when there is text to search in. */
   private showSearch = () => {
-    if (this.getLines() === null) {
+    if (this.getLines() === null || this.state.markdownPreview !== null) {
       return false
     }
 
@@ -1080,9 +1099,13 @@ export class IdeFileViewer extends React.Component<
             </Button>
           </>
         )}
-        {this.renderChangeNavigation()}
-        {this.renderWholeFileButton()}
-        {this.renderFoldButtons()}
+        {this.state.markdownPreview === null && (
+          <>
+            {this.renderChangeNavigation()}
+            {this.renderWholeFileButton()}
+            {this.renderFoldButtons()}
+          </>
+        )}
         {this.hasCSharpSupport(path) && this.state.csharpStatus !== '' && (
           <span className="ide-csharp-status" role="status">
             {this.state.csharpFailed
@@ -1090,7 +1113,7 @@ export class IdeFileViewer extends React.Component<
               : this.state.csharpStatus}
           </span>
         )}
-        {this.getLines() !== null && (
+        {this.getLines() !== null && this.state.markdownPreview === null && (
           <div className="ide-file-viewer-header-buttons">
             <IdeKeysButton
               canEdit={!this.isEditorReadOnly()}
@@ -1159,10 +1182,12 @@ export class IdeFileViewer extends React.Component<
   private renderEditor(
     path: string,
     lines: ReadonlyArray<string>,
-    isDeleted: boolean
+    isDeleted: boolean,
+    zoomFactor: number
   ): JSX.Element {
     const { tabSize } = this.props
     const { revision, draft, lineChanges } = this.state
+    const { markdownPreview } = this.state
 
     return (
       <>
@@ -1175,7 +1200,20 @@ export class IdeFileViewer extends React.Component<
             <Button onClick={this.onRetryCSharp}>Retry C#</Button>
           </div>
         )}
-        <div className="ide-file-viewer-lines">
+        {isMarkdownFile(path) && (
+          <TabBar
+            selectedIndex={markdownPreview === null ? 0 : 1}
+            onTabClicked={this.onMarkdownModeChanged}
+            type={TabBarType.Switch}
+          >
+            <span>Code</span>
+            <span>Preview</span>
+          </TabBar>
+        )}
+        <div
+          className="ide-file-viewer-lines"
+          hidden={markdownPreview !== null}
+        >
           {this.state.isSearching && (
             <>
               <DiffSearchInput
@@ -1196,6 +1234,7 @@ export class IdeFileViewer extends React.Component<
             revision={revision}
             draft={draft}
             tabSize={tabSize}
+            zoomFactor={zoomFactor}
             highlight={isHighlightable(lines)}
             readOnly={isDeleted || this.props.readOnly === true}
             unchangedTextOpacity={this.state.unchangedTextOpacity}
@@ -1234,7 +1273,29 @@ export class IdeFileViewer extends React.Component<
             onCSharpStatus={this.onCSharpStatus}
           />
         </div>
+        {markdownPreview !== null && (
+          <MarkdownFilePreview
+            markdown={markdownPreview}
+            zoomFactor={zoomFactor}
+          />
+        )}
       </>
+    )
+  }
+
+  private onMarkdownModeChanged = (index: number) => {
+    this.setState(
+      {
+        markdownPreview:
+          index === 1
+            ? this.editorRef.current?.getLines().join('\n') ?? ''
+            : null,
+      },
+      () => {
+        if (index === 0) {
+          this.editorRef.current?.refresh()
+        }
+      }
     )
   }
 
@@ -1251,7 +1312,18 @@ export class IdeFileViewer extends React.Component<
 
     switch (contents.kind) {
       case 'text':
-        return this.renderEditor(path, contents.lines, contents.isDeleted)
+        return (
+          <FileContentZoom>
+            {zoomFactor =>
+              this.renderEditor(
+                path,
+                contents.lines,
+                contents.isDeleted,
+                zoomFactor
+              )
+            }
+          </FileContentZoom>
+        )
       case 'binary':
         return this.renderMessage('This is a binary file, it can’t be shown.')
       case 'too-large':

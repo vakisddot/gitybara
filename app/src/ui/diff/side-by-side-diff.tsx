@@ -121,6 +121,9 @@ const closestRow = (n: Node, container: Element) => {
 }
 
 interface ISideBySideDiffProps {
+  /** Magnification of the code and line numbers, independent of window zoom. */
+  readonly zoomFactor?: number
+
   /** The file whose diff should be displayed. */
   readonly file: ChangedFile
 
@@ -477,6 +480,11 @@ export class SideBySideDiff
     prevProps: ISideBySideDiffProps,
     prevState: ISideBySideDiffState
   ) {
+    if (prevProps.zoomFactor !== this.props.zoomFactor) {
+      this.clearListRowsHeightCache()
+      this.virtualListRef.current?.recomputeRowHeights()
+    }
+
     if (
       !highlightParametersEqual(this.props, prevProps, this.state, prevState)
     ) {
@@ -797,6 +805,7 @@ export class SideBySideDiff
                 // rows are memoized and include things like the
                 // noNewlineIndicator
                 rows={rows}
+                zoomFactor={this.props.zoomFactor}
               />
             )}
           </AutoSizer>
@@ -1030,9 +1039,9 @@ export class SideBySideDiff
       DiffRowType.Added
     )
 
-    const lineNumberWidth = getLineWidthFromDigitCount(
-      getNumberOfDigits(diff.maxLineNumber)
-    )
+    const lineNumberWidth =
+      getLineWidthFromDigitCount(getNumberOfDigits(diff.maxLineNumber)) *
+      (this.props.zoomFactor ?? 1)
 
     const rowWithTokens = this.createFullRow(row, index)
     const indentUnit = this.getIndentUnit(diff, this.tabSize)
@@ -1122,7 +1131,10 @@ export class SideBySideDiff
   }
 
   private getRowHeight = (row: { index: number }) => {
-    return listRowsHeightCache.rowHeight(row) ?? DefaultRowHeight
+    const defaultHeight = DefaultRowHeight * (this.props.zoomFactor ?? 1)
+    return listRowsHeightCache.has(row.index, 0)
+      ? listRowsHeightCache.getHeight(row.index, 0) ?? defaultHeight
+      : defaultHeight
   }
 
   private clearListRowsHeightCache = () => {
@@ -1436,11 +1448,10 @@ export class SideBySideDiff
     // contains the mouse, we scroll to it and update the temporary selection.
     for (let index = 0; index < totalRows; index++) {
       // Use row height cache in order to do the math faster
-      let height = listRowsHeightCache.getHeight(index, 0)
-      if (height === undefined) {
+      if (!listRowsHeightCache.has(index, 0)) {
         list.recomputeRowHeights(index)
-        height = listRowsHeightCache.getHeight(index, 0) ?? DefaultRowHeight
       }
+      const height = this.getRowHeight({ index })
 
       if (
         offsetInListScroll >= rowOffset &&

@@ -506,8 +506,8 @@
   }
 }
 
-// The Code / Preview switch above an SVG's diff
-.svg-diff {
+// The Code / Preview switch above an SVG or Markdown diff
+.file-preview-diff {
   display: flex;
   flex-direction: column;
   flex: 1;

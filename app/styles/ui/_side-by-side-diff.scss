@@ -75,7 +75,7 @@
     flex-grow: 1;
     width: 100%;
     font-family: var(--font-family-monospace);
-    font-size: var(--font-size-sm);
+    font-size: calc(var(--font-size-sm) * var(--file-content-zoom, 1));
     color: var(--diff-text-color);
     background: var(--background-color);
   }
@@ -125,7 +125,7 @@
   .row {
     display: flex;
     flex-direction: row;
-    line-height: 20px;
+    line-height: calc(20px * var(--file-content-zoom, 1));
     position: relative;
     height: 100%;
 
