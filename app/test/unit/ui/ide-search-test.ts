@@ -5,7 +5,7 @@ import * as React from 'react'
 
 import { IdeCodeEditor } from '../../../src/ui/changes/ide/ide-code-editor'
 import { NoLineChanges } from '../../../src/ui/changes/ide/ide-line-changes'
-import { render } from '../../helpers/ui/render'
+import { render, waitFor } from '../../helpers/ui/render'
 
 const originalBounds = window.Range.prototype.getBoundingClientRect
 const originalRects = window.Range.prototype.getClientRects
@@ -180,5 +180,131 @@ describe('IdeCodeEditor search', () => {
     editor.search('beta', 'next')
     assert.strictEqual(container.querySelector('.ide-fold-ellipsis'), null)
     assert.deepStrictEqual(textOf('.ide-search-current'), ['beta'])
+  })
+})
+
+describe('IdeCodeEditor selection matches', () => {
+  function showText(text: string, readOnly = false) {
+    view.rerender(
+      React.createElement(IdeCodeEditor, {
+        ...props,
+        ref,
+        text,
+        revision: 1,
+        readOnly,
+      })
+    )
+    const wrapper = container.querySelector<
+      HTMLElement & { CodeMirror: CodeMirror.Editor }
+    >('.CodeMirror')!
+    wrapper.CodeMirror.getInputField().focus()
+    return wrapper.CodeMirror
+  }
+
+  async function expectMatches(expected: ReadonlyArray<string>) {
+    await waitFor(() =>
+      assert.deepStrictEqual(textOf('.cm-ide-selection-match'), expected)
+    )
+  }
+
+  it('highlights matching identifiers and properties with the same case', async () => {
+    const editor = showText(
+      'const value = source.value;\nuse(value, VALUE, other);'
+    )
+    editor.setSelection(CodeMirror.Pos(0, 6), CodeMirror.Pos(0, 11))
+
+    await expectMatches(['value', 'value', 'value'])
+    assert.strictEqual(
+      editor.getValue(),
+      'const value = source.value;\nuse(value, VALUE, other);'
+    )
+    assert.deepStrictEqual(editor.historySize(), { undo: 0, redo: 0 })
+  })
+
+  it('updates matches for keyboard selections and clears them when deselected', async () => {
+    const editor = showText('alpha beta alpha beta', true)
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 5))
+    await expectMatches(['alpha', 'alpha'])
+
+    editor.setCursor(CodeMirror.Pos(0, 6))
+    editor.setExtending(true)
+    for (let i = 0; i < 4; i++) {
+      editor.execCommand('goCharRight')
+    }
+    editor.setExtending(false)
+    await expectMatches(['beta', 'beta'])
+
+    editor.setCursor(CodeMirror.Pos(0, 0))
+    await expectMatches([])
+  })
+
+  it('matches literal punctuation instead of treating the selection as a regex', async () => {
+    const editor = showText('a.b a+b a.b')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 3))
+    await expectMatches(['a.b', 'a.b'])
+  })
+
+  it('supports single-character and non-ASCII names', async () => {
+    const editor = showText('x π x π')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 1))
+    await expectMatches(['x', 'x'])
+
+    editor.setSelection(CodeMirror.Pos(0, 2), CodeMirror.Pos(0, 3))
+    await expectMatches(['π', 'π'])
+  })
+
+  it('ignores whitespace and selections spanning multiple lines', async () => {
+    const editor = showText('word  word\nword')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 4))
+    await expectMatches(['word', 'word', 'word'])
+
+    editor.setSelection(CodeMirror.Pos(0, 4), CodeMirror.Pos(0, 6))
+    await expectMatches([])
+
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 4))
+    await expectMatches(['word', 'word', 'word'])
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(1, 4))
+    await expectMatches([])
+  })
+
+  it('keeps Find highlights independent of the selected text', async () => {
+    const editor = showText('alpha beta alpha beta')
+    ref.current!.search('beta', 'next')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 5))
+    await expectMatches(['alpha', 'alpha'])
+    assert.deepStrictEqual(textOf('.ide-search-current'), ['beta'])
+    assert.deepStrictEqual(textOf('.ide-search-match'), ['beta'])
+
+    ref.current!.clearSearch()
+    await expectMatches(['alpha', 'alpha'])
+  })
+
+  it('clears stale matches after editing and loading another file', async () => {
+    const editor = showText('word word')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 4))
+    await expectMatches(['word', 'word'])
+
+    editor.replaceSelection('changed')
+    await expectMatches([])
+    assert.strictEqual(editor.getValue(), 'changed word')
+
+    editor.setSelection(CodeMirror.Pos(0, 8), CodeMirror.Pos(0, 12))
+    await expectMatches(['word'])
+    view.rerender(
+      React.createElement(IdeCodeEditor, {
+        ...props,
+        ref,
+        path: 'other.ts',
+        text: 'word in another file',
+      })
+    )
+    await expectMatches([])
+  })
+
+  it('disables pending highlighting when the editor is unmounted', () => {
+    const editor = showText('word word')
+    editor.setSelection(CodeMirror.Pos(0, 0), CodeMirror.Pos(0, 4))
+    view.unmount()
+    assert.strictEqual(editor.getOption('highlightSelectionMatches'), false)
   })
 })

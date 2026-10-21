@@ -3,6 +3,7 @@ import * as Path from 'path'
 import CodeMirror from 'codemirror'
 import 'codemirror/addon/fold/foldcode'
 import 'codemirror/addon/fold/foldgutter'
+import 'codemirror/addon/search/match-highlighter'
 import 'codemirror/addon/search/searchcursor'
 import 'codemirror/addon/selection/active-line'
 import 'codemirror/addon/selection/mark-selection'
@@ -243,6 +244,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       readOnly,
       styleActiveLine: !readOnly,
       styleSelectedText: true,
+      highlightSelectionMatches: { minChars: 1, style: 'ide-selection-match' },
       lineWrapping: false,
       viewportMargin: 20,
       gutters: ['CodeMirror-linenumbers', FoldGutter],
@@ -347,6 +349,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   public componentWillUnmount() {
+    this.editor?.setOption('highlightSelectionMatches', false)
     const wrapper = this.editor?.getWrapperElement()
     wrapper?.removeEventListener('mousedown', this.onContextMouseDown, true)
     wrapper?.removeEventListener('contextmenu', this.onContextMenu, true)
