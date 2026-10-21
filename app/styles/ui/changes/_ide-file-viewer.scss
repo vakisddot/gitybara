@@ -348,6 +348,11 @@
       right: calc(var(--spacing) + 15px);
     }
 
+    .cm-ide-selection-match {
+      background-color: color-mix(in srgb, var(--text-color) 14%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-color) 30%, transparent);
+    }
+
     // The same colors as the search of the diff
     .ide-search-match {
       background-color: rgba(255, 255, 0, 0.4);
