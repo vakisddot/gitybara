@@ -257,6 +257,7 @@ export class SideBySideDiff
   implements IDiffView
 {
   private virtualListRef = React.createRef<List>()
+  private searchInputRef = React.createRef<DiffSearchInput>()
   private diffContainer: HTMLDivElement | null = null
 
   /** Diff to restore when "Collapse all expanded lines" option is used */
@@ -523,6 +524,15 @@ export class SideBySideDiff
       this.rowSelectableGroupStaticDataCache.clear()
     }
 
+    if (
+      this.state.isSearching &&
+      this.state.searchQuery !== undefined &&
+      (prevState.diff !== this.state.diff ||
+        prevProps.showSideBySideDiff !== this.props.showSideBySideDiff)
+    ) {
+      this.startSearch(this.state.searchQuery, 'next')
+    }
+
     if (this.state.lastExpandedHunk !== prevState.lastExpandedHunk) {
       this.focusAfterLastExpandedHunkChange()
     }
@@ -764,8 +774,11 @@ export class SideBySideDiff
         <DiffContentsWarning diff={diff} />
         {isSearching && (
           <DiffSearchInput
+            ref={this.searchInputRef}
             onSearch={this.onSearch}
             onClose={this.onSearchCancel}
+            resultCount={this.state.searchResults?.length}
+            selectedResult={this.state.selectedSearchResult}
           />
         )}
         <div
@@ -1811,6 +1824,8 @@ export class SideBySideDiff
   private showSearch = () => {
     if (!this.state.isSearching) {
       this.resetSearch(true)
+    } else {
+      this.searchInputRef.current?.focus()
     }
   }
 
@@ -1818,8 +1833,12 @@ export class SideBySideDiff
     const { searchResults } = this.state
 
     if (searchQuery?.trim() === '') {
-      this.resetSearch(true, 'No results')
-    } else if (searchQuery === this.state.searchQuery && searchResults) {
+      this.resetSearch(true)
+    } else if (
+      searchQuery === this.state.searchQuery &&
+      searchResults !== undefined &&
+      searchResults.length > 0
+    ) {
       this.continueSearch(searchResults, direction)
     } else {
       this.startSearch(searchQuery, direction)
@@ -1835,20 +1854,26 @@ export class SideBySideDiff
     )
 
     if (searchResults === undefined || searchResults.length === 0) {
-      this.resetSearch(true, `No results for "${searchQuery}"`)
-    } else {
-      const ariaLiveMessage = `Result 1 of ${searchResults.length} for "${searchQuery}"`
-
-      this.scrollToSearchResult(0)
-
       this.ariaLiveChangeSignal = !this.ariaLiveChangeSignal
-
       this.setState({
         searchQuery,
         searchResults,
-        selectedSearchResult: 0,
-        ariaLiveMessage,
+        selectedSearchResult: undefined,
+        ariaLiveMessage: `No results for "${searchQuery}"`,
       })
+    } else {
+      const selectedSearchResult =
+        direction === 'next' ? 0 : searchResults.length - 1
+      const ariaLiveMessage = `Result ${selectedSearchResult + 1} of ${
+        searchResults.length
+      } for "${searchQuery}"`
+
+      this.ariaLiveChangeSignal = !this.ariaLiveChangeSignal
+
+      this.setState(
+        { searchQuery, searchResults, selectedSearchResult, ariaLiveMessage },
+        () => this.scrollToSearchResult(selectedSearchResult)
+      )
     }
   }
 
