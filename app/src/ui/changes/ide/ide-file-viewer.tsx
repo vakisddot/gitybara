@@ -161,6 +161,8 @@ interface IIdeFileViewerState {
   /** Whether the box to search the file is shown, and what it announced */
   readonly isSearching: boolean
   readonly searchMessage: string
+  readonly searchResultCount?: number
+  readonly selectedSearchResult?: number
   readonly navigation: ICSharpLocation | null
   readonly navigationHistory: ReadonlyArray<ICSharpLocation>
   readonly navigationForwardHistory: ReadonlyArray<ICSharpLocation>
@@ -183,6 +185,7 @@ export class IdeFileViewer extends React.Component<
   private loadRequestId = 0
   private reloadTimeoutId: number | null = null
   private editorRef = React.createRef<IdeCodeEditor>()
+  private searchInputRef = React.createRef<DiffSearchInput>()
 
   /** Flips when the search has something to announce, even if it's the same */
   private searchAnnouncementSignal = false
@@ -291,6 +294,8 @@ export class IdeFileViewer extends React.Component<
         isWholeFileExpanded: false,
         isSearching: false,
         searchMessage: '',
+        searchResultCount: undefined,
+        selectedSearchResult: undefined,
         csharpStatus: '',
         csharpFailed: false,
         navigationResults: null,
@@ -726,6 +731,8 @@ export class IdeFileViewer extends React.Component<
 
     if (!this.state.isSearching) {
       this.setState({ isSearching: true, searchMessage: '' })
+    } else {
+      this.searchInputRef.current?.focus()
     }
 
     return true
@@ -740,8 +747,12 @@ export class IdeFileViewer extends React.Component<
 
     this.searchAnnouncementSignal = !this.searchAnnouncementSignal
     this.setState({
+      searchResultCount: query.trim() === '' ? undefined : position?.total ?? 0,
+      selectedSearchResult: position?.index,
       searchMessage:
-        position === null
+        query.trim() === ''
+          ? ''
+          : position === null
           ? `No results for “${query}”`
           : `Result ${position.index + 1} of ${position.total} for “${query}”`,
     })
@@ -749,7 +760,12 @@ export class IdeFileViewer extends React.Component<
 
   private onSearchClose = () => {
     this.editorRef.current?.clearSearch()
-    this.setState({ isSearching: false, searchMessage: '' })
+    this.setState({
+      isSearching: false,
+      searchMessage: '',
+      searchResultCount: undefined,
+      selectedSearchResult: undefined,
+    })
   }
 
   private onUnchangedTextOpacityChange = (unchangedTextOpacity: number) => {
@@ -1217,8 +1233,11 @@ export class IdeFileViewer extends React.Component<
           {this.state.isSearching && (
             <>
               <DiffSearchInput
+                ref={this.searchInputRef}
                 onSearch={this.onSearch}
                 onClose={this.onSearchClose}
+                resultCount={this.state.searchResultCount}
+                selectedResult={this.state.selectedSearchResult}
               />
               <AriaLiveContainer
                 message={this.state.searchMessage}

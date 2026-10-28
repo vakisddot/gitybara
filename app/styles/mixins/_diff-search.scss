@@ -10,8 +10,26 @@
   box-shadow: var(--base-box-shadow);
   z-index: var(--popup-z-index);
   background: var(--background-color);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-half);
+  max-width: calc(100% - var(--spacing-double));
+
+  .diff-search-count {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary-color);
+  }
+
+  .button-component {
+    flex-shrink: 0;
+    padding: 0 var(--spacing-half);
+    cursor: pointer;
+  }
 
   .text-box-component {
+    min-width: 0;
+
     input {
       border: 0;
       box-shadow: none;
@@ -23,6 +41,7 @@
       height: var(--text-field-height);
       padding: 0;
       width: 180px;
+      max-width: 100%;
 
       &:focus {
         border: none;
