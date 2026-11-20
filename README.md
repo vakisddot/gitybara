@@ -32,6 +32,34 @@ keeps the familiar tools for commits, branches, and pull requests.
 | **Text search**      | Find text in the open file and move between matches.                                    |
 | **Clearer previews** | Preview SVG images and browse changed files in a folder tree, including in History.     |
 | **Catppuccin Mocha** | Choose a dark theme with soft colors in the appearance settings.                        |
+| **Claude reviews**   | Comment on lines of a diff and send the comments to the Claude Code chat that made it.  |
+
+## Reviews for Claude Code
+
+When a [Claude Code](https://code.claude.com) chat makes changes in a
+repository, you can review them in the Gitybara view, in Changes or History.
+Click the **+** next to a line, or right-click it, and write what Claude should
+change. Comments are kept until you send them, even when you close the app.
+
+**Send to Claude…** lists the Claude Code chats running in the repository and
+picks the one last on the current branch. The chat gets the comments, with the
+file, line and code of each, as a message and starts working on them. You can
+also copy the review and paste it into any chat yourself.
+
+This uses Claude Code's
+[cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging),
+so the chat needs Claude Code 2.1.234 or later on Windows (2.1.224 on macOS and
+Linux). The Claude app can't ask whether to accept a message, so add this to
+your Claude Code user settings (`~/.claude/settings.json`):
+
+```json
+{ "crossSessionInbound": "accept" }
+```
+
+This lets other programs and chats on your computer send messages to your
+chats without asking. The format of the message is not documented by Claude
+Code yet, so this feature is experimental and may need an update after a new
+version of Claude Code.
 
 ## Run it locally
 

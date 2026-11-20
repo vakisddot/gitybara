@@ -24,6 +24,14 @@ const NonTextInputTypes = new Set([
   'submit',
 ])
 
+function isTextField(target: HTMLElement): boolean {
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLInputElement && !NonTextInputTypes.has(target.type))
+  )
+}
+
 /**
  * Whether the letters that are typed at the target are text for the target: a
  * field, a dialog or popover, or the editor while it can be edited.
@@ -36,6 +44,12 @@ export function isTypingTarget(
     return false
   }
 
+  // A review comment is written in a box among the lines of the editor, which
+  // takes text even when the editor can't be edited
+  if (target.closest('.ide-review-widget') !== null) {
+    return isTextField(target)
+  }
+
   // The editor has a text area for its input, which takes no text when it can't
   // be edited
   if (target.closest('.ide-code-editor') !== null) {
@@ -43,11 +57,7 @@ export function isTypingTarget(
   }
 
   return (
-    target.isContentEditable ||
-    target instanceof HTMLTextAreaElement ||
-    (target instanceof HTMLInputElement &&
-      !NonTextInputTypes.has(target.type)) ||
-    target.closest('dialog, [role="dialog"]') !== null
+    isTextField(target) || target.closest('dialog, [role="dialog"]') !== null
   )
 }
 

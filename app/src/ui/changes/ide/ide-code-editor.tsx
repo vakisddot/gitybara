@@ -1,4 +1,5 @@
 import * as React from 'react'
+import * as ReactDOM from 'react-dom'
 import * as Path from 'path'
 import CodeMirror from 'codemirror'
 import 'codemirror/addon/fold/foldcode'
@@ -22,6 +23,17 @@ import {
 } from './ide-indentation'
 import { IInlineChange, ILineChanges, ILineRange } from './ide-line-changes'
 import { IdePreviousLines } from './ide-previous-lines'
+import {
+  CommentGutter,
+  createCommentButton,
+  getLineLabel,
+  getReviewAnchor,
+  IdeReviewWidgets,
+  IIdeEditorReview,
+  IReviewAnchor,
+  IReviewTarget,
+} from './ide-review-comments'
+import { ReviewCommentBox } from './ide-review-comment'
 import { IMenuItem, showContextualMenu } from '../../../lib/menu-item'
 import * as ipcRenderer from '../../../lib/ipc-renderer'
 import { getCSharpTokenClass } from '../../../lib/csharp/semantic-tokens'
@@ -122,6 +134,12 @@ interface IIdeCodeEditorProps {
   /** Viewer actions appended after the standard text-selection actions. */
   readonly additionalContextMenuItems?: ReadonlyArray<IMenuItem>
 
+  /**
+   * The review comments on the file, shown under their lines. Lines can only
+   * be commented on when this is given.
+   */
+  readonly review?: IIdeEditorReview
+
   /** Present only for C# source in the working repository. */
   readonly repositoryPath?: string
   readonly navigationPosition?: ICSharpPosition
@@ -171,6 +189,13 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   private isDirty = false
   private modeRequestId = 0
   private previousLines: IdePreviousLines | null = null
+  private reviewWidgets: IdeReviewWidgets | null = null
+
+  /** The line a comment is being written on, if any */
+  private reviewDraft: IReviewTarget | null = null
+
+  /** The line that shows the button to comment on it, under the pointer */
+  private commentButtonLine: CodeMirror.LineHandle | null = null
   private inlineChanges: ReadonlyArray<IInlineChange> | null = null
   private inlineMarks = new Array<CodeMirror.TextMarker>()
   private semanticMarks = new Array<CodeMirror.TextMarker>()
@@ -247,7 +272,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       highlightSelectionMatches: { minChars: 1, style: 'ide-selection-match' },
       lineWrapping: false,
       viewportMargin: 20,
-      gutters: ['CodeMirror-linenumbers', FoldGutter],
+      gutters: getGutters(this.props.review !== undefined),
       foldGutter: this.getFoldGutterOptions(),
       foldOptions: {
         rangeFinder: this.findFoldRange,
@@ -272,11 +297,18 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.editor = editor
     this.previousLines = new IdePreviousLines(editor)
     this.previousLines.setShown(this.props.showPreviousLines)
+    this.previousLines.setOnComment(
+      this.props.review !== undefined ? this.onCommentOnOldLine : null
+    )
+    this.reviewWidgets = new IdeReviewWidgets(editor)
     const wrapper = editor.getWrapperElement()
     wrapper.addEventListener('mousedown', this.onContextMouseDown, true)
     wrapper.addEventListener('contextmenu', this.onContextMenu, true)
     wrapper.addEventListener('select-all', this.onSelectAll)
     wrapper.addEventListener('keydown', this.onSelectAllKeyDown, true)
+    wrapper.addEventListener('mousemove', this.onCommentButtonHover)
+    wrapper.addEventListener('mouseleave', this.onCommentButtonLeave)
+    editor.on('gutterClick', this.onGutterClick)
     editor.on('renderLine', this.onRenderLine)
     editor.on('changes', this.onChanges)
     editor.on('update', this.onUpdate)
@@ -301,6 +333,7 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     this.setText()
     this.applyMode()
     this.applyNavigationPosition()
+    this.renderReview()
   }
 
   public componentDidUpdate(prevProps: IIdeCodeEditorProps) {
@@ -346,6 +379,18 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     }
 
     this.collapseLines()
+
+    const canComment = this.props.review !== undefined
+    if (canComment !== (prevProps.review !== undefined)) {
+      editor.setOption('gutters', getGutters(canComment))
+      this.previousLines?.setOnComment(
+        canComment ? this.onCommentOnOldLine : null
+      )
+      this.previousLines?.refresh()
+      this.reviewDraft = null
+      this.setCommentButtonLine(null)
+    }
+    this.renderReview()
   }
 
   public componentWillUnmount() {
@@ -355,6 +400,14 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
     wrapper?.removeEventListener('contextmenu', this.onContextMenu, true)
     wrapper?.removeEventListener('select-all', this.onSelectAll)
     wrapper?.removeEventListener('keydown', this.onSelectAllKeyDown, true)
+    wrapper?.removeEventListener('mousemove', this.onCommentButtonHover)
+    wrapper?.removeEventListener('mouseleave', this.onCommentButtonLeave)
+    this.editor?.off('gutterClick', this.onGutterClick)
+    for (const node of this.reviewWidgets?.clear() ?? []) {
+      ReactDOM.unmountComponentAtNode(node)
+    }
+    this.reviewWidgets?.dispose()
+    this.reviewWidgets = null
     // Keep a just-edited file in Roslyn when switching to another source file.
     const document = this.getCSharpDocument()
     if (document !== null) {
@@ -401,8 +454,14 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   private onContextMenu = (event: MouseEvent) => {
+    // A comment box has the menu of a text field
+    if (isInReviewWidget(event.target)) {
+      return
+    }
+
     event.preventDefault()
     event.stopPropagation()
+    const commentItems = this.getCommentMenuItems(event)
     const displayedSelection = this.previousLines?.getSelectedText() ?? null
     if (displayedSelection === null) {
       // The native Copy role reads a current-only selection from this input.
@@ -419,8 +478,202 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
         label: __DARWIN__ ? 'Select All' : 'Select all',
         action: () => this.onSelectAll(),
       },
+      ...commentItems,
       ...(this.props.additionalContextMenuItems ?? []),
     ])
+  }
+
+  /** The menu item to comment on the line that was right-clicked, if it can be. */
+  private getCommentMenuItems(event: MouseEvent): ReadonlyArray<IMenuItem> {
+    const editor = this.editor
+    if (editor === null || this.props.review === undefined) {
+      return []
+    }
+
+    const oldLine =
+      event.target instanceof Element
+        ? this.previousLines?.findOldLine(event.target) ?? null
+        : null
+    const target: IReviewTarget =
+      oldLine !== null
+        ? { side: 'old', line: oldLine.line, lineText: oldLine.text }
+        : this.getNewLineTarget(editor.lineAtHeight(event.clientY, 'window'))
+
+    return [
+      { type: 'separator' },
+      {
+        label: `Comment on ${getLineLabel(target)} for Claude…`,
+        action: () => this.openReviewDraft(target),
+      },
+    ]
+  }
+
+  private getNewLineTarget(index: number): IReviewTarget {
+    return {
+      side: 'new',
+      line: index + 1,
+      lineText: this.editor?.getLine(index) ?? '',
+    }
+  }
+
+  private onGutterClick = (
+    editor: CodeMirror.Editor,
+    line: number,
+    gutter: string
+  ) => {
+    if (gutter === CommentGutter && this.props.review !== undefined) {
+      this.openReviewDraft(this.getNewLineTarget(line))
+    }
+  }
+
+  private onCommentOnOldLine = (line: number, text: string) => {
+    this.openReviewDraft({ side: 'old', line, lineText: text })
+  }
+
+  /** Open the box to write a comment on a line, in place of an open one. */
+  private openReviewDraft(target: IReviewTarget) {
+    const editor = this.editor
+    this.reviewDraft = target
+    this.renderReview()
+
+    const anchor =
+      editor === null
+        ? null
+        : getReviewAnchor(
+            target,
+            editor.lineCount(),
+            this.props.lineChanges.previousLines
+          )
+    if (editor !== null && anchor !== null) {
+      // Enough room under the line for the box
+      editor.scrollIntoView(CodeMirror.Pos(anchor.line, 0), 160)
+    }
+  }
+
+  private closeReviewDraft = () => {
+    this.reviewDraft = null
+    this.renderReview()
+  }
+
+  private onAddReviewComment = (target: IReviewTarget, body: string) => {
+    this.reviewDraft = null
+    this.props.review?.onAdd(target, body)
+    this.renderReview()
+  }
+
+  /**
+   * Show the comments and the box to write one under their lines. The widgets
+   * are put back after the text of the editor is replaced, which takes them
+   * off, and moved when the old lines they are on move.
+   */
+  private renderReview() {
+    const editor = this.editor
+    const widgets = this.reviewWidgets
+    if (editor === null || widgets === null) {
+      return
+    }
+
+    const { review } = this.props
+    const lineCount = editor.lineCount()
+    const blocks = this.props.lineChanges.previousLines
+    const items = new Array<{
+      readonly key: string
+      readonly anchor: IReviewAnchor
+      readonly element: JSX.Element
+    }>()
+
+    for (const comment of review?.comments ?? []) {
+      const anchor = getReviewAnchor(comment, lineCount, blocks)
+      if (review !== undefined && anchor !== null) {
+        items.push({
+          key: comment.id,
+          anchor,
+          element: (
+            <ReviewCommentBox
+              comment={comment}
+              target={comment}
+              onAdd={this.onAddReviewComment}
+              onUpdate={review.onUpdate}
+              onRemove={review.onRemove}
+              onCancel={this.closeReviewDraft}
+            />
+          ),
+        })
+      }
+    }
+
+    const draft = this.reviewDraft
+    const draftAnchor =
+      draft === null ? null : getReviewAnchor(draft, lineCount, blocks)
+    if (review !== undefined && draft !== null && draftAnchor !== null) {
+      items.push({
+        // Another line gets a box of its own, which starts empty
+        key: `draft:${draft.side}:${draft.line}`,
+        anchor: draftAnchor,
+        element: (
+          <ReviewCommentBox
+            comment={null}
+            target={draft}
+            onAdd={this.onAddReviewComment}
+            onUpdate={review.onUpdate}
+            onRemove={review.onRemove}
+            onCancel={this.closeReviewDraft}
+          />
+        ),
+      })
+    }
+
+    const { nodes, removed } = widgets.sync(items)
+    removed.forEach(node => ReactDOM.unmountComponentAtNode(node))
+    for (const { key, element } of items) {
+      const node = nodes.get(key)
+      if (node !== undefined) {
+        ReactDOM.render(element, node)
+      }
+    }
+  }
+
+  /** Show the button to comment on the line under the pointer. */
+  private onCommentButtonHover = (event: MouseEvent) => {
+    const editor = this.editor
+    if (editor === null || this.props.review === undefined) {
+      return
+    }
+
+    // Not while over the comments or the old lines, which have their own
+    const overWidget =
+      event.target instanceof Element &&
+      event.target.closest('.CodeMirror-linewidget') !== null
+    this.setCommentButtonLine(
+      overWidget ? null : editor.lineAtHeight(event.clientY, 'window')
+    )
+  }
+
+  private onCommentButtonLeave = () => {
+    this.setCommentButtonLine(null)
+  }
+
+  private setCommentButtonLine(line: number | null) {
+    const editor = this.editor
+    const current = this.commentButtonLine
+    const currentLine =
+      current === null || editor === null ? null : editor.getLineNumber(current)
+
+    if (editor === null || currentLine === line) {
+      return
+    }
+
+    if (current !== null && currentLine !== null) {
+      editor.setGutterMarker(current, CommentGutter, null)
+    }
+    this.commentButtonLine =
+      line === null
+        ? null
+        : editor.setGutterMarker(
+            line,
+            CommentGutter,
+            createCommentButton(line + 1)
+          )
   }
 
   private onSelectAll = (event?: Event) => {
@@ -433,6 +686,11 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
   }
 
   private onSelectAllKeyDown = (event: KeyboardEvent) => {
+    // The text of a comment box is selected as in any field
+    if (isInReviewWidget(event.target)) {
+      return
+    }
+
     if (
       event.key.toLowerCase() === 'a' &&
       (__DARWIN__ ? event.metaKey : event.ctrlKey) &&
@@ -1383,6 +1641,20 @@ export class IdeCodeEditor extends React.Component<IIdeCodeEditorProps> {
       />
     )
   }
+}
+
+/** The gutters of the editor, with the one to comment on lines if they can be. */
+function getGutters(canComment: boolean): string[] {
+  return canComment
+    ? ['CodeMirror-linenumbers', FoldGutter, CommentGutter]
+    : ['CodeMirror-linenumbers', FoldGutter]
+}
+
+/** Whether an event is in a comment, or the box to write one. */
+function isInReviewWidget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element && target.closest('.ide-review-widget') !== null
+  )
 }
 
 /** Mark a match of a search, in another way when it's the one gone to. */

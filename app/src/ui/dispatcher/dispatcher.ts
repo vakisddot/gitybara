@@ -94,6 +94,8 @@ import {
 } from '../../models/status'
 import { TipState, IValidBranch } from '../../models/tip'
 import { Banner, BannerType } from '../../models/banner'
+import { IReviewComment } from '../../models/review-comment'
+import { IClaudeSession } from '../../lib/claude-code/sessions'
 
 import { ApplicationTheme } from '../lib/application-theme'
 import { installCLI } from '../lib/install-cli'
@@ -4321,6 +4323,51 @@ export class Dispatcher {
   /** Select the file shown in the IDE view of the changes list. */
   public setIdeSelectedFilePath(repository: Repository, path: string | null) {
     this.appStore._setIdeSelectedFilePath(repository, path)
+  }
+
+  /** Add a comment to the review of the repository, for Claude Code. */
+  public addReviewComment(repository: Repository, comment: IReviewComment) {
+    this.appStore._addReviewComment(repository, comment)
+  }
+
+  /** Change the text of a review comment. */
+  public updateReviewComment(repository: Repository, id: string, body: string) {
+    this.appStore._updateReviewComment(repository, id, body)
+  }
+
+  /** Delete a review comment. */
+  public removeReviewComment(repository: Repository, id: string) {
+    this.appStore._removeReviewComment(repository, id)
+  }
+
+  /** Delete all the review comments of the repository. */
+  public clearReviewComments(repository: Repository) {
+    this.appStore._clearReviewComments(repository)
+  }
+
+  /** The text of the review, as it is sent to Claude Code. */
+  public getReviewPrompt(repository: Repository, note: string) {
+    return this.appStore._getReviewPrompt(repository, note)
+  }
+
+  /**
+   * The Claude Code chats running in the repository or its worktrees, and the
+   * one to suggest for its review.
+   */
+  public findClaudeSessions(repository: Repository) {
+    return this.appStore._findClaudeSessions(repository)
+  }
+
+  /**
+   * Send the review to a Claude Code chat, then clear it. Throws if the chat
+   * can't be reached, keeping the review.
+   */
+  public sendReviewToClaude(
+    repository: Repository,
+    session: IClaudeSession,
+    note: string
+  ) {
+    return this.appStore._sendReviewToClaude(repository, session, note)
   }
 
   /** Switch to the Files tab with the given file selected. */

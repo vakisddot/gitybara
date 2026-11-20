@@ -1,5 +1,6 @@
 import * as React from 'react'
 import classNames from 'classnames'
+import memoizeOne from 'memoize-one'
 import { Repository } from '../models/repository'
 import { Commit, CommitOneLine } from '../models/commit'
 import { TipState } from '../models/tip'
@@ -8,6 +9,7 @@ import { Changes, ChangesSidebar } from './changes'
 import { NoChanges } from './changes/no-changes'
 import { IdeFileTree } from './changes/ide/ide-file-tree'
 import { IdeFileViewer } from './changes/ide/ide-file-viewer'
+import { getFileViewerReview } from './changes/ide/ide-review'
 import { TreeRowHeight } from './changes/filter-changes-list'
 import { MultipleSelection } from './changes/multiple-selection'
 import { FilesChangedBadge } from './changes/files-changed-badge'
@@ -195,6 +197,9 @@ export class RepositoryView extends React.Component<
 
   private readonly changesSidebarRef = React.createRef<ChangesSidebar>()
   private readonly compareSidebarRef = React.createRef<CompareSidebar>()
+
+  /** The review comments for the Gitybara view of the changes. */
+  private readonly getReview = memoizeOne(getFileViewerReview)
 
   private focusHistoryNeeded: boolean = false
   private focusChangesNeeded: boolean = false
@@ -590,6 +595,7 @@ export class RepositoryView extends React.Component<
         showSideBySideDiff={this.props.showSideBySideDiff}
         showGitybaraDiff={this.props.showGitybaraDiff}
         tabSize={this.props.selectedTabSize}
+        reviewComments={this.props.state.reviewComments}
         onOpenBinaryFile={this.onOpenBinaryFile}
         onOpenSubmodule={this.onOpenSubmodule}
         onChangeImageDiffType={this.onChangeImageDiffType}
@@ -688,6 +694,11 @@ export class RepositoryView extends React.Component<
             readOnly={true}
             collapseUnchangedLines={true}
             headerExtras={this.renderChangesDiffOptions()}
+            review={this.getReview(
+              this.props.dispatcher,
+              this.props.repository,
+              this.props.state.reviewComments
+            )}
           />
         )
       }

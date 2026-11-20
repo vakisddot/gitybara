@@ -1,4 +1,5 @@
 import * as React from 'react'
+import memoizeOne from 'memoize-one'
 import { writeClipboardText } from '../main-process-proxy'
 import * as Path from 'path'
 
@@ -40,6 +41,8 @@ import { DiffHeader } from '../diff/diff-header'
 import { DiffViewController } from '../diff/diff-view-controller'
 import { DiffOptions } from '../diff/diff-options'
 import { IdeFileViewer } from '../changes/ide/ide-file-viewer'
+import { getFileViewerReview } from '../changes/ide/ide-review'
+import { IReviewComment } from '../../models/review-comment'
 import { Account } from '../../models/account'
 import { Emoji } from '../../lib/emoji'
 import { getBoolean, setBoolean } from '../../lib/local-storage'
@@ -81,6 +84,9 @@ interface ISelectedCommitsProps {
 
   /** The width of a tab character, in characters. */
   readonly tabSize: number
+
+  /** The review comments of the repository, for the Gitybara view. */
+  readonly reviewComments: ReadonlyArray<IReviewComment>
 
   /**
    * Called when the user requests to open a binary file in an the
@@ -129,6 +135,7 @@ export class SelectedCommits extends React.Component<
 > {
   private readonly loadChangedFilesScheduler = new ThrottledScheduler(200)
   private readonly diffViewController = new DiffViewController()
+  private readonly getReview = memoizeOne(getFileViewerReview)
 
   public constructor(props: ISelectedCommitsProps) {
     super(props)
@@ -218,6 +225,11 @@ export class SelectedCommits extends React.Component<
           readOnly={true}
           collapseUnchangedLines={true}
           commit={{ sha: latestSha, diff, status: file.status }}
+          review={this.getReview(
+            this.props.dispatcher,
+            this.props.repository,
+            this.props.reviewComments
+          )}
           headerExtras={
             <DiffOptions
               isInteractiveDiff={false}

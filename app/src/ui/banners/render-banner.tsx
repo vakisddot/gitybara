@@ -171,6 +171,16 @@ export function renderBanner(
       )
     case BannerType.OSVersionNoLongerSupported:
       return <OSVersionNoLongerSupportedBanner onDismissed={onDismissed} />
+    case BannerType.ReviewSentToClaude:
+      return (
+        <SuccessBanner
+          key="review-sent-to-claude"
+          timeout={5000}
+          onDismissed={onDismissed}
+        >
+          Review sent to <strong>{banner.chatName}</strong>.
+        </SuccessBanner>
+      )
     default:
       return assertNever(banner, `Unknown popup type: ${banner}`)
   }

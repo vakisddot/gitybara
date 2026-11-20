@@ -1,0 +1,51 @@
+// The dialog that sends the review comments of the Gitybara view to Claude
+#send-review-to-claude {
+  width: 560px;
+
+  .send-review-comments {
+    max-height: 180px;
+    margin: 0 0 var(--spacing);
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--box-border-color);
+    border-radius: var(--border-radius);
+
+    li {
+      display: flex;
+      flex-direction: column;
+      padding: var(--spacing-half) var(--spacing);
+
+      & + li {
+        border-top: 1px solid var(--box-border-color);
+      }
+    }
+  }
+
+  .send-review-comment-where {
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .send-review-comment-body {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .send-review-hint {
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .send-review-secondary-buttons {
+    display: flex;
+    gap: var(--spacing-half);
+  }
+}

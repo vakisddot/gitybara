@@ -57,6 +57,7 @@ export enum PopupType {
   OpenShellFailed = 'OpenShellFailed',
   InitializeLFS = 'InitializeLFS',
   ImportFromGitHubDesktop = 'ImportFromGitHubDesktop',
+  SendReviewToClaude = 'SendReviewToClaude',
   LFSAttributeMismatch = 'LFSAttributeMismatch',
   UpstreamAlreadyExists = 'UpstreamAlreadyExists',
   ReleaseNotes = 'ReleaseNotes',
@@ -239,6 +240,7 @@ export type PopupDetail =
   | { type: PopupType.OpenShellFailed; message: string }
   | { type: PopupType.InitializeLFS; repositories: ReadonlyArray<Repository> }
   | { type: PopupType.ImportFromGitHubDesktop }
+  | { type: PopupType.SendReviewToClaude; repository: Repository }
   | { type: PopupType.LFSAttributeMismatch }
   | {
       type: PopupType.UpstreamAlreadyExists

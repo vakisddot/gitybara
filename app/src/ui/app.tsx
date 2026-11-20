@@ -104,6 +104,7 @@ import { GenericGitAuthentication } from './generic-git-auth'
 import { ShellError } from './shell'
 import { InitializeLFS, AttributeMismatch } from './lfs'
 import { ImportFromGitHubDesktop } from './import-github-desktop/import-github-desktop'
+import { SendReviewDialog } from './claude-review/send-review-dialog'
 import { UpstreamAlreadyExists } from './upstream-already-exists'
 import { ReleaseNotes } from './release-notes'
 import { DeletePullRequest } from './delete-branch/delete-pull-request-dialog'
@@ -2123,6 +2124,19 @@ export class App extends React.Component<IAppProps, IAppState> {
             repositories={this.state.repositories.filter(
               (r): r is Repository => r instanceof Repository
             )}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.SendReviewToClaude:
+        return (
+          <SendReviewDialog
+            key="send-review-to-claude"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            comments={
+              this.props.repositoryStateManager.get(popup.repository)
+                .reviewComments
+            }
             onDismissed={onPopupDismissedFn}
           />
         )

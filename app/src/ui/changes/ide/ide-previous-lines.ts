@@ -61,6 +61,9 @@ export class IdePreviousLines {
   private lineNumberWidth = -1
   private readonly selection: IdeDiffSelection
 
+  /** Called to comment on an old line, null when they can't be commented on */
+  private onComment: ((line: number, text: string) => void) | null = null
+
   public constructor(private readonly editor: CodeMirror.Editor) {
     this.selection = new IdeDiffSelection(editor, () => this.previews)
     editor.on('update', this.lineUpWithGutter)
@@ -191,6 +194,34 @@ export class IdePreviousLines {
   public dispose() {
     this.clear()
     this.editor.off('update', this.lineUpWithGutter)
+  }
+
+  /**
+   * Give the old lines a button to comment on them, which calls the function
+   * with the number and the text of the line, or take it away with null.
+   */
+  public setOnComment(
+    onComment: ((line: number, text: string) => void) | null
+  ) {
+    const changed = (this.onComment === null) !== (onComment === null)
+    this.onComment = onComment
+    if (changed && this.shown) {
+      this.refresh()
+    }
+  }
+
+  /** The old line that an element is in, if it's in one. */
+  public findOldLine(
+    element: Element
+  ): { readonly line: number; readonly text: string } | null {
+    const row = element.closest<HTMLElement>('.ide-previous-line')
+    const line = Number(row?.dataset.oldLine)
+    const block = this.blocks?.find(
+      b => line >= b.oldLineNumber && line < b.oldLineNumber + b.lines.length
+    )
+    return block === undefined
+      ? null
+      : { line, text: block.lines[line - block.oldLineNumber] }
   }
 
   /** The display-only selection, if it contains previous code. */
@@ -340,10 +371,12 @@ export class IdePreviousLines {
     node.appendChild(this.createRows(preview.block))
     preview.node = node
     // The text scrolls sideways with the text of the file, and old lines that
-    // are longer than all of those make the file scroll further
+    // are longer than all of those make the file scroll further. They come
+    // first, before the comments on them, which are widgets of the same line.
     preview.widget = this.editor.addLineWidget(preview.handle, node, {
       above: preview.above,
       coverGutter: true,
+      insertAt: 0,
     })
   }
 
@@ -353,19 +386,25 @@ export class IdePreviousLines {
     const changes = new Map(
       block.inlineChanges.map(range => [range.line, range])
     )
-    const codeNodes = block.lines.map((_, i) => {
+    const codeNodes = block.lines.map((text, i) => {
+      const oldLine = block.oldLineNumber + i
       const row = document.createElement('div')
       row.className = 'ide-previous-line'
+      row.dataset.oldLine = String(oldLine)
       const gutter = document.createElement('span')
       gutter.className = 'ide-previous-line-gutter'
       const lineNumber = document.createElement('span')
       lineNumber.className = 'ide-previous-line-number'
-      lineNumber.textContent = String(block.oldLineNumber + i)
+      lineNumber.textContent = String(oldLine)
       const minus = document.createElement('span')
       minus.className = 'ide-previous-line-minus'
       minus.textContent = '−'
       minus.setAttribute('aria-hidden', 'true')
-      gutter.append(lineNumber, minus)
+      gutter.append(lineNumber)
+      if (this.onComment !== null) {
+        gutter.append(this.createCommentButton(oldLine, text))
+      }
+      gutter.append(minus)
       const code = document.createElement('code')
       code.style.tabSize = String(this.editor.getOption('tabSize'))
       row.append(gutter, code)
@@ -413,6 +452,20 @@ export class IdePreviousLines {
       }
     )
     return rows
+  }
+
+  /** The button on an old line to comment on it. */
+  private createCommentButton(line: number, text: string): HTMLElement {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'ide-previous-line-comment'
+    button.textContent = '+'
+    button.title = `Comment on old line ${line} for Claude`
+    button.setAttribute('aria-label', button.title)
+    // Not the start of a selection of the lines
+    button.addEventListener('mousedown', event => event.stopPropagation())
+    button.addEventListener('click', () => this.onComment?.(line, text))
+    return button
   }
 }
 

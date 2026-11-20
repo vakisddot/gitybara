@@ -121,6 +121,21 @@ describe('getIdeShortcut', () => {
     assert.strictEqual(press(input, 'w', {}, true), 'previous-change')
   })
 
+  it('leaves the keys to a review comment in an editor that can not be edited', () => {
+    const editor = create('div')
+    editor.className = 'ide-code-editor'
+    const widget = create('div', editor)
+    widget.className = 'ide-review-widget'
+    const comment = create('textarea', widget)
+
+    assert.strictEqual(press(comment, 's', {}, true), null)
+    assert.strictEqual(press(comment, 'f', {}, true), null)
+    assert.strictEqual(
+      press(create('button', widget), 's', {}, true),
+      'next-change'
+    )
+  })
+
   it('ignores a key that was already handled', () => {
     const listener = (event: Event) => event.preventDefault()
     document.addEventListener('keydown', listener, { capture: true })

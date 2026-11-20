@@ -20,6 +20,7 @@ import { Tip } from '../models/tip'
 import { Commit } from '../models/commit'
 import { CommittedFileChange, WorkingDirectoryStatus } from '../models/status'
 import { WorktreeEntry } from '../models/worktree'
+import { IReviewComment } from '../models/review-comment'
 import { CloningRepository } from '../models/cloning-repository'
 import { IMenu } from '../models/app-menu'
 import { IRemote } from '../models/remote'
@@ -679,6 +680,12 @@ export interface IRepositoryState {
    * This option resets to false after each commit.
    */
   readonly allowEmptyCommit: boolean
+
+  /**
+   * The comments written on lines of the Gitybara view, kept until they are
+   * sent to Claude Code or discarded.
+   */
+  readonly reviewComments: ReadonlyArray<IReviewComment>
 }
 
 export type CommitOptions = Pick<

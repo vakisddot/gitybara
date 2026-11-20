@@ -17,6 +17,7 @@ export enum BannerType {
   SuccessfulReorder = 'SuccessfulReorder',
   ConflictsFound = 'ConflictsFound',
   OSVersionNoLongerSupported = 'OSVersionNoLongerSupported',
+  ReviewSentToClaude = 'ReviewSentToClaude',
 }
 
 export type Banner =
@@ -122,3 +123,8 @@ export type Banner =
       readonly onOpenConflictsDialog: () => void
     }
   | { readonly type: BannerType.OSVersionNoLongerSupported }
+  | {
+      readonly type: BannerType.ReviewSentToClaude
+      /** The title of the Claude Code chat the review was sent to. */
+      readonly chatName: string
+    }

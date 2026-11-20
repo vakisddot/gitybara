@@ -602,4 +602,116 @@
       color: var(--text-color);
     }
   }
+
+  // The "+" to comment on a line for Claude, on the line under the pointer
+  .ide-comment-gutter {
+    width: 18px;
+  }
+
+  .ide-comment-button,
+  .ide-previous-line-comment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-top: calc((20px * var(--file-content-zoom, 1) - 16px) / 2);
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    font-family: var(--font-family-sans-serif);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--background-color);
+    background: var(--button-background);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  // On the old lines it shows while the pointer is over the line
+  .ide-previous-line-comment {
+    flex: none;
+    margin-left: 1px;
+    opacity: 0;
+
+    &:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  .ide-previous-line:hover .ide-previous-line-comment {
+    opacity: 1;
+  }
+
+  // A comment under its line, next to the gutter, which stays put when the
+  // text scrolls sideways
+  .ide-review-widget {
+    padding: var(--spacing-half) var(--spacing);
+    font-family: var(--font-family-sans-serif);
+    font-size: var(--font-size);
+    white-space: normal;
+  }
+
+  .ide-review-comment {
+    max-width: 720px;
+    border: 1px solid var(--box-border-color);
+    border-left: 3px solid var(--button-background);
+    border-radius: var(--border-radius);
+    background: var(--background-color);
+    color: var(--text-color);
+
+    .ide-review-comment-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      padding: var(--spacing-half) var(--spacing-half) var(--spacing-half) var(--spacing);
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+
+    .ide-review-comment-title {
+      flex: 1;
+    }
+
+    .ide-review-comment-button {
+      padding: 0 var(--spacing-half);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary-color);
+
+      &:hover {
+        color: var(--text-color);
+      }
+    }
+
+    .ide-review-comment-body {
+      padding: 0 var(--spacing) var(--spacing);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+
+    .ide-review-comment-input {
+      display: block;
+      box-sizing: border-box;
+      width: calc(100% - 2 * var(--spacing));
+      margin: 0 var(--spacing);
+      resize: vertical;
+      font-family: var(--font-family-sans-serif);
+      font-size: var(--font-size);
+    }
+
+    .ide-review-comment-actions {
+      display: flex;
+      gap: var(--spacing-half);
+      padding: var(--spacing-half) var(--spacing) var(--spacing);
+    }
+  }
+
+  // How many comments there are for Claude, and the button to send them
+  .ide-review-bar {
+    background: var(--box-alt-background-color);
+    border-bottom: 1px solid var(--box-border-color);
+  }
 }

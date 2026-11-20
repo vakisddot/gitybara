@@ -26,6 +26,7 @@ import { sendNonFatalException } from '../helpers/non-fatal-exception'
 import { IStatsStore } from '../stats'
 import { RepoRulesInfo } from '../../models/repo-rules'
 import { WorktreeEntry } from '../../models/worktree'
+import { getStoredReviewComments } from './helpers/review-comments-storage'
 
 export class RepositoryStateCache {
   private readonly repositoryState = new Map<string, IRepositoryState>()
@@ -39,7 +40,10 @@ export class RepositoryStateCache {
       return existing
     }
 
-    const newItem = getInitialRepositoryState()
+    const newItem: IRepositoryState = {
+      ...getInitialRepositoryState(),
+      reviewComments: getStoredReviewComments(repository),
+    }
     this.repositoryState.set(repository.hash, newItem)
     return newItem
   }
@@ -445,6 +449,7 @@ function getInitialRepositoryState(): IRepositoryState {
     skipCommitHooks: false,
     signOffCommits: false,
     allowEmptyCommit: false,
+    reviewComments: [],
   }
 }
 

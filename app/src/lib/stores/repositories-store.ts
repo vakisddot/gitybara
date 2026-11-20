@@ -26,6 +26,7 @@ import {
 import { TypedBaseStore } from './base-store'
 import { WorkflowPreferences } from '../../models/workflow-preferences'
 import { clearTagsToPush } from './helpers/tags-to-push-storage'
+import { clearStoredReviewComments } from './helpers/review-comments-storage'
 import { IMatchedGitHubRepository } from '../repository-matching'
 import { shallowEquals } from '../equality'
 
@@ -273,6 +274,7 @@ export class RepositoriesStore extends TypedBaseStore<
   public async removeRepository(repository: Repository): Promise<void> {
     await this.db.repositories.delete(repository.id)
     clearTagsToPush(repository)
+    clearStoredReviewComments(repository)
 
     this.emitUpdatedRepositories()
   }

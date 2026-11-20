@@ -27,6 +27,8 @@ import {
 import { Octicon, iconForStatus } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { IdeCodeEditor } from './ide-code-editor'
+import { IReviewComment } from '../../../models/review-comment'
+import { IIdeEditorReview, IReviewTarget } from './ide-review-comments'
 import { ICSharpLocation } from '../../../lib/csharp/types'
 import { closeCSharpWorkspace } from './ide-csharp'
 import {
@@ -81,6 +83,18 @@ const getDraftKey = (repository: Repository, path: string) =>
  */
 let previousLinesSwitchedOn = false
 
+/** The review of a repository, which the lines of its diffs are added to. */
+export interface IIdeFileViewerReview {
+  /** All the review comments of the repository, on every file and commit. */
+  readonly comments: ReadonlyArray<IReviewComment>
+  readonly onAdd: (comment: IReviewComment) => void
+  readonly onUpdate: (id: string, body: string) => void
+  readonly onRemove: (id: string) => void
+
+  /** Open the dialog that sends the review to Claude Code. */
+  readonly onSend: () => void
+}
+
 /** A commit to show the file of, instead of the working directory. */
 export interface IIdeFileViewerCommit {
   readonly sha: string
@@ -120,6 +134,12 @@ interface IIdeFileViewerProps {
    */
   readonly commit?: IIdeFileViewerCommit
   readonly onSelectedPathChanged?: (path: string) => void
+
+  /**
+   * The review the lines can be commented on for, for Claude Code. Without
+   * it, they can't be.
+   */
+  readonly review?: IIdeFileViewerReview
 }
 
 interface IIdeFileViewerState {
@@ -213,6 +233,32 @@ export class IdeFileViewer extends React.Component<
 
   private getEditorText = memoizeOne((lines: ReadonlyArray<string>) =>
     lines.join('\n')
+  )
+
+  /** The comments on the file that is shown, and how to add to them. */
+  private getEditorReview = memoizeOne(
+    (
+      review: IIdeFileViewerReview | undefined,
+      path: string,
+      commitSha: string | null
+    ): IIdeEditorReview | undefined =>
+      review === undefined
+        ? undefined
+        : {
+            comments: review.comments.filter(
+              c => c.path === path && c.commitSha === commitSha
+            ),
+            onAdd: (target: IReviewTarget, body: string) =>
+              review.onAdd({
+                id: crypto.randomUUID(),
+                path,
+                commitSha,
+                ...target,
+                body,
+              }),
+            onUpdate: review.onUpdate,
+            onRemove: review.onRemove,
+          }
   )
 
   public constructor(props: IIdeFileViewerProps) {
@@ -1195,6 +1241,30 @@ export class IdeFileViewer extends React.Component<
     )
   }
 
+  private renderReviewBar() {
+    const { review } = this.props
+    const count = review?.comments.length ?? 0
+
+    if (review === undefined || count === 0) {
+      return null
+    }
+
+    return (
+      <div className="ide-file-viewer-banner ide-review-bar">
+        <Octicon symbol={octicons.comment} />
+        <span className="ide-file-viewer-banner-text">
+          {count} {count === 1 ? 'comment' : 'comments'} for Claude
+        </span>
+        <Button
+          className="ide-file-viewer-banner-button"
+          onClick={review.onSend}
+        >
+          Send to Claude…
+        </Button>
+      </div>
+    )
+  }
+
   private renderEditor(
     path: string,
     lines: ReadonlyArray<string>,
@@ -1207,6 +1277,7 @@ export class IdeFileViewer extends React.Component<
 
     return (
       <>
+        {this.renderReviewBar()}
         {this.renderBanners(isDeleted)}
         {this.hasCSharpSupport(path) && this.state.csharpFailed && (
           <div className="ide-file-viewer-banner">
@@ -1290,6 +1361,16 @@ export class IdeFileViewer extends React.Component<
             onNavigationForward={this.onNavigationForward}
             onNavigationResults={this.onNavigationResults}
             onCSharpStatus={this.onCSharpStatus}
+            review={
+              // The lines of a deleted file are those of the version before it
+              isDeleted
+                ? undefined
+                : this.getEditorReview(
+                    this.props.review,
+                    path,
+                    this.props.commit?.sha ?? null
+                  )
+            }
           />
         </div>
         {markdownPreview !== null && (

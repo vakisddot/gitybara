@@ -319,6 +319,15 @@ import {
 } from '../feature-flag'
 import { isGHES } from '../endpoint-capabilities'
 import { Banner, BannerType } from '../../models/banner'
+import { IReviewComment } from '../../models/review-comment'
+import { storeReviewComments } from './helpers/review-comments-storage'
+import { formatReviewPrompt } from '../claude-code/review-prompt'
+import { sendToClaudeSession } from '../claude-code/send-message'
+import {
+  findClaudeSessions,
+  IClaudeSession,
+  pickDefaultSession,
+} from '../claude-code/sessions'
 import { ComputedAction } from '../../models/computed-action'
 import {
   createDesktopStashEntry,
@@ -10925,6 +10934,89 @@ export class AppStore extends TypedBaseStore<IAppState> {
       ideSelectedFilePath: path,
     }))
     this.emitUpdate()
+  }
+
+  private updateReviewComments(
+    repository: Repository,
+    fn: (
+      comments: ReadonlyArray<IReviewComment>
+    ) => ReadonlyArray<IReviewComment>
+  ) {
+    const current = this.repositoryStateCache.get(repository).reviewComments
+    const reviewComments = fn(current)
+    this.repositoryStateCache.update(repository, () => ({ reviewComments }))
+    storeReviewComments(repository, reviewComments)
+    this.emitUpdate()
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _addReviewComment(repository: Repository, comment: IReviewComment) {
+    this.updateReviewComments(repository, comments => [...comments, comment])
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _updateReviewComment(
+    repository: Repository,
+    id: string,
+    body: string
+  ) {
+    this.updateReviewComments(repository, comments =>
+      comments.map(c => (c.id === id ? { ...c, body } : c))
+    )
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _removeReviewComment(repository: Repository, id: string) {
+    this.updateReviewComments(repository, comments =>
+      comments.filter(c => c.id !== id)
+    )
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _clearReviewComments(repository: Repository) {
+    this.updateReviewComments(repository, () => [])
+  }
+
+  private getCurrentBranchName(repository: Repository) {
+    const { tip } = this.repositoryStateCache.get(repository).branchesState
+    return tip.kind === TipState.Valid ? tip.branch.name : null
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _getReviewPrompt(repository: Repository, note: string) {
+    const { reviewComments } = this.repositoryStateCache.get(repository)
+    return formatReviewPrompt(reviewComments, {
+      branch: this.getCurrentBranchName(repository),
+      note,
+    })
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public async _findClaudeSessions(repository: Repository) {
+    const { worktrees } = this.repositoryStateCache.get(repository)
+    const folders = [repository.path, ...worktrees.map(w => w.path)]
+    const sessions = await findClaudeSessions(folders)
+    return {
+      sessions,
+      suggested: pickDefaultSession(
+        sessions,
+        this.getCurrentBranchName(repository)
+      ),
+    }
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public async _sendReviewToClaude(
+    repository: Repository,
+    session: IClaudeSession,
+    note: string
+  ) {
+    await sendToClaudeSession(session, this._getReviewPrompt(repository, note))
+    this._clearReviewComments(repository)
+    this._setBanner({
+      type: BannerType.ReviewSentToClaude,
+      chatName: session.name ?? 'Claude Code',
+    })
   }
 
   public _setChangesListFilterText(repository: Repository, filterText: string) {
